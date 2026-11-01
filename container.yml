@@ -1,0 +1,166 @@
+---
+- name: System-Wide (/etc) and User Environment Setup
+  hosts: localhost
+  connection: local
+  gather_facts: true
+  vars:
+    # Git over HTTPS as wyrd-automation[bot], for this playbook, for Dagu (templates/etc/dagu/base.yml.j2), and
+    # for `git automation` (templates/usr/local/bin/git-automation.j2).
+    # Remotes are SSH URLs for humans and agents, who use them through `git <handle>`; the bot is a GitHub App,
+    # which has no SSH, so automation rewrites them to HTTPS. None of this is in ~/.gitconfig.
+    automation_git_env:
+      GH_LOGIN: "wyrd-automation[bot]"
+      GH_OWNER: "{{org}}"
+      GIT_CONFIG_COUNT: "2"
+      GIT_CONFIG_KEY_0: "credential.https://github.com.helper"
+      GIT_CONFIG_VALUE_0: "!/home/vscode/.local/bin/gh auth git-credential"
+      GIT_CONFIG_KEY_1: "url.https://github.com/.insteadOf"
+      GIT_CONFIG_VALUE_1: "git@github.com:"
+      GIT_AUTHOR_NAME: "wyrd-automation[bot]"
+      GIT_AUTHOR_EMAIL: "350608332+wyrd-automation[bot]@users.noreply.github.com"
+      GIT_COMMITTER_NAME: "wyrd-automation[bot]"
+      GIT_COMMITTER_EMAIL: "350608332+wyrd-automation[bot]@users.noreply.github.com"
+
+  tasks:
+    - name: Load variables from workspace options
+      ansible.builtin.include_vars:
+        file: /etc/workspace/config.yml
+    - name: Apply system-wide configurations as root
+      become: true
+      vars:
+        template_root: "{{ playbook_dir }}/templates/etc"
+      block:
+        - name: Find all template files locally
+          ansible.builtin.find:
+            paths: "{{ template_root }}"
+            recurse: true
+            patterns: "*.j2"
+          delegate_to: localhost
+          become: false
+          register: template_files
+
+        - name: Ensure target subdirectories exist under /etc
+          ansible.builtin.file:
+            path: "/etc/{{ item.path | dirname | relpath(template_root) }}"
+            state: directory
+            owner: root
+            group: root
+            mode: '0755'
+          loop: "{{ template_files.files }}"
+          when: item.path | dirname != template_root
+
+        - name: Render and deploy templates to /etc
+          ansible.builtin.template:
+            src: "{{ item.path }}"
+            dest: "/etc/{{ item.path | relpath(template_root) | regex_replace('\\.j2$', '') }}"
+            owner: root
+            group: root
+            mode: '0644'
+          loop: "{{ template_files.files }}"
+
+        # On PATH, so `git automation <cmd>` works; project-template hooks use it
+        - name: Install git-automation
+          ansible.builtin.template:
+            src: templates/usr/local/bin/git-automation.j2
+            dest: /usr/local/bin/git-automation
+            owner: root
+            group: root
+            mode: '0755'
+
+    - name: Apply system-wide configurations as vscode
+      become: true
+      become_user: vscode
+      block:
+        # GitHub CLI ==========================================================
+
+        - name: Install or upgrade gh-vault-agent-app-token
+          ansible.builtin.include_tasks: tasks/install_gh_vault_agent_app_token.yml
+
+        # Dotfiles ============================================================
+
+        - name: Clone dotfiles
+          ansible.builtin.command:
+            argv:
+              - chezmoi
+              - init
+              - "{{dotfiles_repo}}"
+            creates: /home/vscode/.local/share/chezmoi/.git
+        - name: Apply dotfiles
+          ansible.builtin.command:
+            argv:
+              - chezmoi
+              - update
+              - --init
+          environment:
+            BAO_ADDR: "{{ lookup('env', 'BAO_ADDR') }}"
+            # sudo resets PATH to secure_path; the run_ scripts need the container's (brew, node)
+            PATH: "{{ lookup('env', 'PATH') }}"
+            NPM_CONFIG_PREFIX: "{{ lookup('env', 'NPM_CONFIG_PREFIX') }}"
+            # run_after_gh-extensions.sh installs and upgrades extensions as the bot
+            GH_LOGIN: "{{ automation_git_env.GH_LOGIN }}"
+            GH_OWNER: "{{ automation_git_env.GH_OWNER }}"
+
+        # Repos run after the dotfiles: the gh shim and its app-token config come from them
+        - name: Clone and check out repositories as wyrd-automation[bot]
+          # PATH as in "Apply dotfiles": init_local_workflows.yml runs toha from brew
+          environment: "{{ automation_git_env | combine({'BAO_ADDR': lookup('env', 'BAO_ADDR'), 'PATH': lookup('env', 'PATH')}) }}"
+          block:
+            # Repos ===========================================================
+            - name: Clone memory
+              ansible.builtin.include_tasks: tasks/clone_bare_git.yml
+              vars:
+                org: "{{org}}"
+                repo: memory
+
+            - name: Clone tasks
+              ansible.builtin.include_tasks: tasks/clone_bare_git.yml
+              vars:
+                org: "{{org}}"
+                repo: tasks
+
+            - name: Clone workflows
+              ansible.builtin.include_tasks: tasks/clone_bare_git.yml
+              vars:
+                org: "{{org}}"
+                repo: workflows
+
+            # Tasks ===========================================================
+
+            - name: Checkout {{workspace}} tasks
+              ansible.builtin.include_tasks: tasks/clone_or_create_branch.yml
+              vars:
+                org: "{{org}}"
+                repo: tasks
+                branch: "workspace/{{workspace}}"
+                remote: "origin"
+                worktree: "/tasks"
+
+            # Workflows =======================================================
+
+            - name: Checkout main workflows
+              ansible.builtin.include_tasks: tasks/clone_or_create_branch.yml
+              vars:
+                org: "{{org}}"
+                repo: workflows
+                branch: "main"
+                remote: "origin"
+                worktree: "/workflows/main"
+
+            - name: Checkout {{workspace}} workflows
+              ansible.builtin.include_tasks: tasks/clone_or_create_branch.yml
+              vars:
+                org: "{{org}}"
+                repo: workflows
+                branch: "{{workspace}}"
+                remote: "origin"
+                worktree: "/workflows/local"
+                init_task: tasks/init_local_workflows.yml
+
+  # 3. HANDLERS
+  # Handlers only run if a task in step 1 actually changes a file
+  handlers:
+    - name: Restart sshd
+      become: true
+      ansible.builtin.service:
+        name: ssh
+        state: restarted

@@ -1,0 +1,27 @@
+{
+    "apiKeyHelper": "bao kv get -field=api_key kv/xolotl/keys/{{xolotl_key}}",
+    "autoMemoryEnabled": false,
+    "awaySummaryEnabled": false,
+    "env": {
+        "ANTHROPIC_BASE_URL": "{{ xolotl_url }}",
+        "CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY": "1",
+        "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+        "GH_LOGIN": "mmenm-claude[bot]"
+    },
+    "extraKnownMarketplaces": {
+        "workspaces": {
+            "source": {
+                "source": "github",
+                "repo": "belangley/workspaces"
+            }
+        }
+    },
+    "promptSuggestionEnabled": false,
+    "skipDangerousModePermissionPrompt": true,
+    "statusLine": {
+        "type": "command",
+        "command": "bash ~/.claude/statusline-command.sh"
+    },
+    "terminalProgressBarEnabled": true,
+    "theme": "dark"
+}

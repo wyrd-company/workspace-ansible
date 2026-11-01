@@ -1,0 +1,45 @@
+extensions:
+  zpages:
+    endpoint: localhost:55679
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: localhost:4317
+      http:
+        endpoint: localhost:4318
+
+processors:
+  memory_limiter:
+    limit_mib: 1024
+    spike_limit_mib: 512
+    check_interval: 5s
+
+exporters:
+  otlp:
+      endpoint: {{otlp_endpoint}}
+      tls:
+        insecure: false
+      sending_queue:
+            storage: file_storage
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter]
+      exporters: [debug]
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter]
+      exporters: [debug]
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter]
+      exporters: [debug]
+
+  extensions:
+    - file_storage
+    - headers_setter
+    - zpages

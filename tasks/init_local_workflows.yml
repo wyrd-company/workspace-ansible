@@ -1,0 +1,6 @@
+# No terminal under ansible, so toha takes the scripted route; the template asks no questions
+- name: Run toha
+  ansible.builtin.command:
+    chdir: "/workflows"
+    cmd: "toha apply --answers - /workflows/main local"
+    stdin: '{"template": "/workflows/main", "answers": {}}'

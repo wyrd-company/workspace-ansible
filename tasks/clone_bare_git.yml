@@ -1,0 +1,28 @@
+---
+# Expected variables:
+#   org: string (GitHub org or base path)
+#   repo: string (Repository name)
+
+- name: Define repository paths
+  ansible.builtin.set_fact:
+    _bare_repo_path: "/repos/{{ repo }}.git"
+    _repo_uri: "git@github.com:{{ org }}/{{ repo }}.git"
+
+# 1. Ensure bare repo exists
+- name: Check if bare repository exists
+  ansible.builtin.stat:
+    path: "{{ _bare_repo_path }}"
+  register: _bare_stat
+
+- name: Clone bare repository if missing
+  ansible.builtin.command:
+    cmd: "git clone --bare {{ _repo_uri }} {{ _bare_repo_path }}"
+  when: not _bare_stat.stat.exists
+
+# `git clone --bare` sets no fetch refspec, so nothing lands in origin/*; give it
+# the usual one so worktrees get remote-tracking refs and upstreams. A no-op once set.
+- name: Fetch all branches into origin/*
+  ansible.builtin.command:
+    cmd: "git config remote.origin.fetch '+refs/heads/*:refs/remotes/origin/*'"
+    chdir: "{{ _bare_repo_path }}"
+  changed_when: false

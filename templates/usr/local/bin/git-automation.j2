@@ -1,0 +1,9 @@
+#!/bin/sh
+# git automation <git args...>: run git as wyrd-automation[bot], over HTTPS.
+# Rendered by workspace-ansible from automation_git_env in container.yml, the same
+# settings the playbook and Dagu use. For infrastructure commits, such as a new orphan
+# branch; humans and agents commit through `git <handle>`.
+{% for name, value in automation_git_env.items() %}
+export {{ name }}={{ value | quote }}
+{% endfor %}
+exec git "$@"

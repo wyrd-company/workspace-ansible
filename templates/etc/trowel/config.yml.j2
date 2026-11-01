@@ -1,0 +1,34 @@
+server:
+  listen: 9090
+
+nats:
+  url: {{nats_url}}
+  name: {{workspace}}-trowel
+  creds_vault:
+    address: unix:///run/wyrwood/vault.sock
+    auth:
+      approle:
+
+subjects:
+  - name: {{workspace}}-ansible
+    subject: webhooks.github.{{org}}.workspace-ansible.release.new
+    destinations:
+      - name: sync
+        command:
+          argv:
+            - sudo
+            - ansible-sync
+          # ansible-sync reruns the whole playbook; the 60s default would kill it
+          timeout: 30m
+  - name: {{workspace}}-dotfiles
+    subject: webhooks.github.{{org}}.workspace-dotfiles.main.push
+    destinations:
+      - name: chezmoi
+        command:
+          argv:
+            - chezmoi
+            - update
+            - --init
+          dir: /home/vscode
+          env:
+            BAO_ADDR: unix:///run/wyrwood/vault.sock

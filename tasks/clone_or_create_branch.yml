@@ -1,0 +1,142 @@
+---
+# Expected variables:
+#   org: string (GitHub org or base path)
+#   repo: string (Repository name)
+#   branch: string (Target branch name)
+#   remote: string (Remote URL or alias, e.g. "git@github.com:{{ org }}/{{ repo }}.git" or "origin")
+#   worktree: string (Absolute path to target worktree directory)
+#   init_task: string (Optional path to a task file to include if newly created)
+#   Commit identity and credentials come from the caller's environment (automation_git_env in container.yml)
+
+- name: Define repository paths
+  ansible.builtin.set_fact:
+    _bare_repo_path: "/repos/{{ repo }}.git"
+
+- name: Clone bare repository if missing
+  ansible.builtin.include_tasks:
+    file: tasks/clone_bare_git.yml
+
+# A worktree is provisioned once it has a commit and an upstream, both local checks.
+# Anything less is a run that failed partway; the steps below resume it.
+- name: Check if worktree exists
+  ansible.builtin.stat:
+    path: "{{ worktree }}/.git"
+  register: _worktree_stat
+
+- name: Check worktree for a commit
+  ansible.builtin.command:
+    cmd: "git rev-parse --verify -q HEAD"
+    chdir: "{{ worktree }}"
+  register: _head_check
+  failed_when: false
+  changed_when: false
+  when: _worktree_stat.stat.exists
+
+- name: Check worktree for an upstream
+  ansible.builtin.command:
+    cmd: "git config branch.{{ branch }}.remote"
+    chdir: "{{ worktree }}"
+  register: _upstream_check
+  failed_when: false
+  changed_when: false
+  when: _worktree_stat.stat.exists
+
+- name: Set provision trigger flag
+  ansible.builtin.set_fact:
+    _has_commit: "{{ (_head_check.rc | default(1)) == 0 }}"
+    _needs_provision: >-
+      {{ (not _bare_stat.stat.exists) or (not _worktree_stat.stat.exists)
+         or (_head_check.rc | default(1)) != 0 or (_upstream_check.rc | default(1)) != 0 }}
+
+- name: Provision worktree and branch
+  when: _needs_provision
+  block:
+    - name: Fetch latest references in bare repo
+      ansible.builtin.command:
+        cmd: "git fetch origin"
+        chdir: "{{ _bare_repo_path }}"
+      changed_when: false
+
+    - name: Check if branch exists on remote
+      ansible.builtin.command:
+        cmd: "git ls-remote --exit-code --heads origin {{ branch }}"
+        chdir: "{{ _bare_repo_path }}"
+      register: _remote_branch_check
+      failed_when: false
+      changed_when: false
+
+    - name: Set remote existence flag
+      ansible.builtin.set_fact:
+        _branch_on_remote: "{{ _remote_branch_check.rc == 0 }}"
+
+    # Path A: Branch exists on remote -> add worktree on it
+    # A bare clone has no origin/* refs, so fetch the branch into the local branch of the same name
+    - name: Fetch existing remote branch
+      ansible.builtin.command:
+        cmd: "git fetch origin {{ branch }}:{{ branch }}"
+        chdir: "{{ _bare_repo_path }}"
+      when: _branch_on_remote and not _worktree_stat.stat.exists
+
+    - name: Add worktree on existing remote branch
+      ansible.builtin.command:
+        cmd: "git worktree add {{ worktree }} {{ branch }}"
+        chdir: "{{ _bare_repo_path }}"
+      when: _branch_on_remote and not _worktree_stat.stat.exists
+
+    - name: Set upstream of existing remote branch
+      ansible.builtin.command:
+        cmd: "git branch --set-upstream-to=origin/{{ branch }} {{ branch }}"
+        chdir: "{{ worktree }}"
+      when: _branch_on_remote
+
+    # Path B: Branch does NOT exist on remote -> create worktree on new orphan branch (no history from main)
+    - name: Add worktree with brand new branch
+      ansible.builtin.command:
+        cmd: "git worktree add --orphan -b {{ branch }} {{ worktree }}"
+        chdir: "{{ _bare_repo_path }}"
+      when: not _branch_on_remote and not _worktree_stat.stat.exists
+
+    # Initialization & initial push (only if branch did not exist on remote)
+    - name: Execute initialization steps for new branch
+      when: not _branch_on_remote
+      block:
+        - name: Initialize and commit new branch
+          when: not _has_commit
+          block:
+            # Resuming: the branch has never had a commit, so its files are only what the failed
+            # run left; clear them so the init task starts as it did then (keeps the .git file)
+            - name: Clear worktree left by a failed run
+              ansible.builtin.shell:
+                cmd: "git read-tree --empty && git clean -ffdx"
+                chdir: "{{ worktree }}"
+              when: _worktree_stat.stat.exists
+
+            - name: Run optional init task
+              when:
+                - init_task is defined
+                - init_task | length > 0
+              ansible.builtin.include_tasks:
+                file: "{{ init_task }}"
+
+            - name: Stage initialized changes
+              ansible.builtin.command:
+                cmd: "git add -A"
+                chdir: "{{ worktree }}"
+
+            # Empty when there is no init task: the branch needs a commit to push
+            - name: Commit new branch
+              ansible.builtin.command:
+                cmd: "git commit --allow-empty -m 'Initialize {{ branch }}'"
+                chdir: "{{ worktree }}"
+
+        - name: Push new branch and set upstream tracking
+          ansible.builtin.command:
+            cmd: "git push -u origin {{ branch }}"
+            chdir: "{{ worktree }}"
+
+    # A state the steps above don't resume fails here, not silently on every later start
+    - name: Verify worktree has a commit and an upstream
+      ansible.builtin.shell:
+        cmd: "git rev-parse --verify -q HEAD && git config branch.{{ branch }}.remote"
+        chdir: "{{ worktree }}"
+      changed_when: false

@@ -1,0 +1,26 @@
+skip_examples: true
+paths:
+  # Not beside this file by default: Dagu looks for ~/.config/dagu/base.yaml
+  base_config: /etc/dagu/base.yml
+  dags_dir: /workflows/local/dags
+  wiki_dir: /workflows/local/wiki
+  alt_dags_dir: "/workflows/main/sub-dags"
+dag_discovery:
+  recursive: true
+
+# Workflows sharing one git clone name a queue, so they cannot fetch it
+# concurrently -- concurrent fetches race a ref lock. A queue no config defines
+# already runs one at a time; only a queue that needs more goes here. t3code is
+# listed so the queue its workflows share is written down.
+# For the vault secrets in base.yml. No token: the Wyrwood socket adds it.
+secrets:
+  vault:
+    address: unix:///run/wyrwood/vault.sock
+
+queues:
+  enabled: true
+  config:
+    - name: t3code
+      max_concurrency: 1
+
+# TODO: OIDC/Vault

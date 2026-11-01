@@ -1,0 +1,52 @@
+---
+# Installs or upgrades the gh-vault-agent-app-token extension from its latest release, laid out as
+# `gh extension install` would (binary + manifest.yml), so `gh extension upgrade` keeps working.
+# Not left to the dotfiles: the gh shim needs it to mint the token any authenticated gh call uses.
+# Both the release lookup and the download are anonymous. ~/.local/share/gh/extensions is a shared
+# cache mount, so another workspace may already have installed it.
+
+- name: Define extension paths
+  ansible.builtin.set_fact:
+    _ext_dir: /home/vscode/.local/share/gh/extensions/gh-vault-agent-app-token
+    _ext_arch: "{{ {'x86_64': 'amd64', 'aarch64': 'arm64'}[ansible_architecture] }}"
+
+- name: Read the installed extension manifest
+  ansible.builtin.slurp:
+    src: "{{ _ext_dir }}/manifest.yml"
+  register: _ext_manifest
+  failed_when: false
+
+- name: Look up the latest extension release
+  ansible.builtin.uri:
+    url: https://api.github.com/repos/wyrd-company/gh-vault-agent-app-token/releases/latest
+  register: _ext_release
+
+- name: Install the latest extension release
+  when: >-
+    _ext_manifest.content is not defined
+    or (_ext_manifest.content | b64decode | from_yaml).tag != _ext_release.json.tag_name
+  block:
+    - name: Create the extension directory
+      ansible.builtin.file:
+        path: "{{ _ext_dir }}"
+        state: directory
+        mode: '0755'
+
+    - name: Download the extension binary
+      ansible.builtin.get_url:
+        url: "https://github.com/wyrd-company/gh-vault-agent-app-token/releases/download/{{ _ext_release.json.tag_name }}/gh-vault-agent-app-token_{{ _ext_release.json.tag_name }}_linux-{{ _ext_arch }}"
+        dest: "{{ _ext_dir }}/gh-vault-agent-app-token"
+        mode: '0755'
+        force: true
+
+    - name: Write the extension manifest
+      ansible.builtin.copy:
+        dest: "{{ _ext_dir }}/manifest.yml"
+        mode: '0644'
+        content: |
+          owner: wyrd-company
+          name: gh-vault-agent-app-token
+          host: github.com
+          tag: {{ _ext_release.json.tag_name }}
+          ispinned: false
+          path: {{ _ext_dir }}/gh-vault-agent-app-token
