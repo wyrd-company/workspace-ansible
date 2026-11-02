@@ -9,7 +9,8 @@ base_url = "{{ xolotl_url }}/v1"
 wire_api = "responses"
 
 [model_providers.xolotl.auth]
-command = "bao kv get -field=api_key kv/xolotl/keys/{{xolotl_key}}"
+command = "bao"
+args = ["kv", "get", "-field=api_key", "kv/xolotl/keys/{{xolotl_key}}"]
 
 [notice]
 hide_full_access_warning = true
