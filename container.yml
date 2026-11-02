@@ -154,7 +154,7 @@
               ansible.builtin.include_tasks: tasks/clone_or_create_branch.yml
               vars:
                 repo: workflows
-                branch: "{{workspace}}"
+                branch: "workspace/{{workspace}}"
                 remote: "origin"
                 worktree: "/workflows/local"
                 init_task: tasks/init_local_workflows.yml
