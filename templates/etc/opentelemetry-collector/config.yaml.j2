@@ -16,30 +16,24 @@ processors:
     spike_limit_mib: 512
     check_interval: 5s
 
+# Discards everything until there is an OTLP endpoint to export to.
 exporters:
-  otlp:
-      endpoint: {{otlp_endpoint}}
-      tls:
-        insecure: false
-      sending_queue:
-            storage: file_storage
+  nop:
 
 service:
   pipelines:
     traces:
       receivers: [otlp]
       processors: [memory_limiter]
-      exporters: [debug]
+      exporters: [nop]
     metrics:
       receivers: [otlp]
       processors: [memory_limiter]
-      exporters: [debug]
+      exporters: [nop]
     logs:
       receivers: [otlp]
       processors: [memory_limiter]
-      exporters: [debug]
+      exporters: [nop]
 
   extensions:
-    - file_storage
-    - headers_setter
     - zpages
