@@ -118,19 +118,16 @@
             - name: Clone memory
               ansible.builtin.include_tasks: tasks/clone_bare_git.yml
               vars:
-                org: "{{org}}"
                 repo: memory
 
             - name: Clone tasks
               ansible.builtin.include_tasks: tasks/clone_bare_git.yml
               vars:
-                org: "{{org}}"
                 repo: tasks
 
             - name: Clone workflows
               ansible.builtin.include_tasks: tasks/clone_bare_git.yml
               vars:
-                org: "{{org}}"
                 repo: workflows
 
             # Tasks ===========================================================
@@ -138,7 +135,6 @@
             - name: Checkout {{workspace}} tasks
               ansible.builtin.include_tasks: tasks/clone_or_create_branch.yml
               vars:
-                org: "{{org}}"
                 repo: tasks
                 branch: "workspace/{{workspace}}"
                 remote: "origin"
@@ -149,7 +145,6 @@
             - name: Checkout main workflows
               ansible.builtin.include_tasks: tasks/clone_or_create_branch.yml
               vars:
-                org: "{{org}}"
                 repo: workflows
                 branch: "main"
                 remote: "origin"
@@ -158,7 +153,6 @@
             - name: Checkout {{workspace}} workflows
               ansible.builtin.include_tasks: tasks/clone_or_create_branch.yml
               vars:
-                org: "{{org}}"
                 repo: workflows
                 branch: "{{workspace}}"
                 remote: "origin"
