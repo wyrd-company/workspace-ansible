@@ -67,6 +67,15 @@
             group: root
             mode: '0755'
 
+        # The homelab CA is bind-mounted read-only into /usr/local/share/ca-certificates at run time, so the image's
+        # trust store does not have it. Every start and every ansible-sync rebuilds the store from that directory.
+        - name: Refresh the CA trust store
+          ansible.builtin.command:
+            argv:
+              - update-ca-certificates
+          register: ca_certificates
+          changed_when: "'0 added, 0 removed' not in ca_certificates.stdout"
+
     - name: Apply system-wide configurations as vscode
       become: true
       become_user: vscode
