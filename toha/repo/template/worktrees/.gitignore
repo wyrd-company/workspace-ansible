@@ -1,0 +1,6 @@
+# Ignore all worktrees and everything inside them
+/*/
+
+# Do not ignore the .gitignore file itself
+!.gitignore
+!AGENTS.md

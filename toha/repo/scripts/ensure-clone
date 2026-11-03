@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Usage: ensure-clone <url> <bare> <branch>
+#
+# Make the current directory a repo folder: a bare clone of <url> in <bare> and a
+# worktree of <branch> in ./<branch> that tracks origin. Anything already there
+# is left alone.
+#
+# Not a bare clone named .git: toha writes its record into a target's Git
+# repository, and fails on one with no working tree.
+#
+# Clone and fetch go through `git automation` (wyrd-automation[bot] over HTTPS):
+# plain git over SSH is refused outside `git <handle>`. <url> stays the SSH URL,
+# which is what humans and agents use through `git <handle>`.
+ensure_clone() {
+    local usage="Usage: ${FUNCNAME[0]} <url> <bare> <branch>"
+    local url=${1:?$usage}
+    local bare=${2:?$usage}
+    local branch=${3:?$usage}
+
+    if ! git check-ref-format --branch "$branch" >/dev/null; then
+        echo "Error: invalid branch name: $branch" >&2
+        return 1
+    fi
+
+    if [[ ! -f "$bare/HEAD" ]]; then
+        git automation clone --quiet --bare "$url" "$bare"
+    fi
+
+    # `git clone --bare` sets no fetch refspec, so nothing lands in origin/*
+    git -C "$bare" config remote.origin.fetch '+refs/heads/*:refs/remotes/origin/*'
+    git -C "$bare" automation fetch --quiet origin
+
+    if [[ -e "$branch/.git" ]]; then
+        echo "Already a worktree; leaving it: $branch"
+        return 0
+    fi
+    if ! git -C "$bare" show-ref --quiet --verify "refs/remotes/origin/$branch"; then
+        echo "Error: origin has no branch '$branch'" >&2
+        return 1
+    fi
+    # Absolute: `git -C "$bare" worktree add` would resolve a relative path against <bare>
+    git -C "$bare" worktree add --quiet "$PWD/$branch" "$branch"
+    git -C "$branch" branch --quiet --set-upstream-to "origin/$branch" "$branch"
+}
+
+ensure_clone "$@"

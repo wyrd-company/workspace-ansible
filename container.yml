@@ -58,7 +58,7 @@
             mode: '0644'
           loop: "{{ template_files.files }}"
 
-        # On PATH, so `git automation <cmd>` works; project-template hooks use it
+        # On PATH, so `git automation <cmd>` works; the hooks of the toha templates use it
         - name: Install git-automation
           ansible.builtin.template:
             src: templates/usr/local/bin/git-automation.j2
@@ -158,6 +158,19 @@
                 remote: "origin"
                 worktree: "/workflows/local"
                 init_task: tasks/init_local_workflows.yml
+
+    # After the dotfiles: the install runs toha from brew
+    - name: Install toha templates as root
+      become: true
+      environment:
+        PATH: "{{ lookup('env', 'PATH') }}"
+      block:
+        - name: Install toha templates
+          ansible.builtin.include_tasks: tasks/install_toha_templates.yml
+          vars:
+            toha_templates:
+              - project
+              - repo
 
   # 3. HANDLERS
   # Handlers only run if a task in step 1 actually changes a file

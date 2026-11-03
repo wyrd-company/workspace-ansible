@@ -1,0 +1,42 @@
+name: project
+description: Setup a project folder in the workspace
+
+requires:
+  - git
+  - program: git-automation
+    hint: Installed by workspace-ansible; apply this template inside a workspace container
+
+interview:
+  - id: project
+    computed: "toha_target_name"
+  
+  - id: proceed
+    type: confirm
+    prompt: "Proceed setting up project {{project}}?"
+    default: true
+
+  - flow: stop
+    when: "not proceed"
+    label: "Declined to setup {{project}}"
+
+  - message: "Checking out or creating {{project}} memory..."
+  - hook:
+      script: scripts/ensure-worktree
+      args:
+        - "/repos/memory.git"
+        - "{{project}}"
+        - "memory"
+
+  - message: "Checking out or creating {{project}} tasks..."
+  - hook:
+      script: scripts/ensure-worktree
+      args:
+        - "/repos/tasks.git"
+        - "project/{{project}}"
+        - "tasks"
+
+messages:
+  after-apply: |
+    {{project}} setup complete.
+
+    Use the toha `repo` template to add repos to the project.

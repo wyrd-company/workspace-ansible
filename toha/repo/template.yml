@@ -1,0 +1,43 @@
+name: repo
+description: Setup a repo clone in the product folder
+
+requires:
+  - git
+  - program: git-automation
+    hint: Installed by workspace-ansible; apply this template inside a workspace container
+
+interview:
+  - id: repo
+    computed: "toha_target_name"
+
+  - id: org
+    type: text
+    prompt: GitHub Organization or Account
+    description: The organization or account on GitHub that holds the repo
+    placeholder: org
+    required: true
+
+  - id: fork
+    type: confirm
+    prompt: Is this a fork?
+    default: false
+
+  - id: proceed
+    type: confirm
+    prompt: "Proceed setting up repo {{org}}/{{repo}}?"
+    default: true
+
+  - flow: stop
+    when: "not proceed"
+    label: "Declined to setup {{org}}/{{repo}}"
+
+  - id: branch
+    computed: "'fork' if fork else 'main'"
+
+  - message: "Bare cloning {{org}}/{{repo}} and adding the {{branch}} worktree..."
+  - hook:
+      script: scripts/ensure-clone
+      args:
+        - "git@github.com:{{org}}/{{repo}}.git"
+        - "{{repo}}.git"
+        - "{{branch}}"

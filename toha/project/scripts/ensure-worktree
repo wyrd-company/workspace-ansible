@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Usage: ensure-worktree <bare> <branch> <path>
+#
+# Make sure <path> is a worktree of <branch> checked out from the bare clone
+# <bare>, one of the /repos clones workspace-ansible makes; it is required, not
+# created. A branch missing on the remote is created as an orphan branch with an
+# empty initial commit and pushed. <path> is normally an empty bind-mount point
+# (it may hold the template's .gitkeep). A worktree that already exists is left
+# alone.
+#
+# Fetch, commit, and push go through `git automation` (wyrd-automation[bot] over
+# HTTPS): plain git over SSH is refused outside `git <handle>`.
+ensure_worktree() {
+    local usage="Usage: ${FUNCNAME[0]} <bare> <branch> <path>"
+    local bare=${1:?$usage}
+    local branch=${2:?$usage}
+    local path=${3:?$usage}
+
+    if ! git check-ref-format --branch "$branch" >/dev/null; then
+        echo "Error: invalid branch name: $branch" >&2
+        return 1
+    fi
+    # Absolute: `git -C "$bare" worktree add` would resolve a relative path against <bare>
+    path=$(realpath -m -- "$path")
+
+    if [[ ! -f "$bare/HEAD" ]]; then
+        echo "Error: no bare clone at $bare; workspace-ansible creates it" >&2
+        return 1
+    fi
+    git -C "$bare" automation fetch --quiet origin
+
+    if [[ -e "$path/.git" ]]; then
+        echo "Already a worktree; leaving it: $path"
+        return 0
+    fi
+    require_empty "$path"
+    rmdir "$path" 2>/dev/null || true
+
+    if git -C "$bare" show-ref --quiet --verify "refs/heads/$branch"; then
+        echo "Checking out existing local branch '$branch' at $path"
+        git -C "$bare" worktree add --quiet "$path" "$branch"
+    elif git -C "$bare" show-ref --quiet --verify "refs/remotes/origin/$branch"; then
+        echo "Checking out '$branch' from origin at $path"
+        git -C "$bare" worktree add --quiet --track -b "$branch" "$path" "origin/$branch"
+    else
+        echo "Remote has no '$branch'; creating an orphan branch at $path and pushing it"
+        git -C "$bare" worktree add --quiet --orphan -b "$branch" "$path"
+        git -C "$path" automation commit --quiet --allow-empty -m "Initialize $branch"
+        git -C "$path" automation push --quiet --set-upstream origin "$branch"
+    fi
+}
+
+# An empty directory, or one holding only the template's .gitkeep, is fine.
+require_empty() {
+    local dir=$1
+    [[ -d "$dir" ]] || { mkdir -p "$dir"; return 0; }
+    rm -f "$dir/.gitkeep"
+    if [[ -n "$(find "$dir" -mindepth 1 -maxdepth 1 | head -1)" ]]; then
+        echo "Error: not empty: $dir" >&2
+        return 1
+    fi
+}
+
+ensure_worktree "$@"

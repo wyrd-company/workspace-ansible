@@ -1,0 +1,60 @@
+---
+# The templates in toha/ go in toha's system layer, so `toha apply project` and `toha apply repo` work for every
+# user in the container. A template found by scanning that path starts untrusted, and both have hooks, so each gets
+# a system registry entry approving what was just installed. toha lapses an approval when the hooks change.
+# Run as root, after the dotfiles: toha comes from brew.
+#
+# Expected variables:
+#   toha_templates: list of folder names under toha/
+
+- name: Install toha templates
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/toha/{{ item }}/"
+    dest: "/usr/local/share/toha/{{ item }}/"
+    owner: root
+    group: root
+    mode: preserve
+    directory_mode: '0755'
+  loop: "{{ toha_templates }}"
+
+- name: Create a scratch toha user layer
+  ansible.builtin.tempfile:
+    state: directory
+    prefix: toha-approval-
+  register: _toha_scratch
+  changed_when: false
+
+# Only `templates add --trust` computes an approval, and it writes the user registry; read it from a scratch one
+- name: Compute approvals for the toha templates
+  ansible.builtin.command:
+    argv:
+      - toha
+      - templates
+      - add
+      - --trust
+      - "/usr/local/share/toha/{{ item }}"
+  environment:
+    XDG_DATA_HOME: "{{ _toha_scratch.path }}"
+    XDG_CONFIG_HOME: "{{ _toha_scratch.path }}"
+    XDG_CACHE_HOME: "{{ _toha_scratch.path }}"
+  loop: "{{ toha_templates }}"
+  changed_when: false
+
+- name: Read the approvals
+  ansible.builtin.slurp:
+    src: "{{ _toha_scratch.path }}/toha/templates.yml"
+  register: _toha_approvals
+
+- name: Write the system toha registry
+  ansible.builtin.copy:
+    content: "{{ _toha_approvals.content | b64decode | from_yaml | to_nice_yaml(indent=2) }}"
+    dest: /usr/local/share/toha/templates.yml
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Remove the scratch toha user layer
+  ansible.builtin.file:
+    path: "{{ _toha_scratch.path }}"
+    state: absent
+  changed_when: false
