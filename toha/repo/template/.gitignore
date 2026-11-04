@@ -1,0 +1,4 @@
+# The bare clone and default branch worktrees have their own Git history.
+/*.git/
+/main/
+/fork/

@@ -31,6 +31,11 @@ interview:
     when: "not proceed"
     label: "Declined to setup {{org}}/{{repo}}"
 
+  - id: remote
+    type: git
+    prompt: Repository folder remote URL (empty for none)
+    description: Tracks the setup folder; the cloned repository keeps its own remote.
+
   - id: branch
     computed: "'fork' if fork else 'main'"
 

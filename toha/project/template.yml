@@ -19,6 +19,10 @@ interview:
     when: "not proceed"
     label: "Declined to setup {{project}}"
 
+  - id: remote
+    type: git
+    prompt: Project remote URL (empty for none)
+
   - message: "Checking out or creating {{project}} memory..."
   - hook:
       script: scripts/ensure-worktree
