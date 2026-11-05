@@ -1,18 +1,8 @@
 # System defaults for every Codex session: https://learn.chatgpt.com/docs/config-file/config-reference
 # Codex reads /etc/codex/config.toml (defaults), managed_config.toml and requirements.toml (constraints).
-# These are settings, not constraints: in requirements.toml Codex ignored model, notice and tui.
-# Models come from Xolotl; the client key is fetched through the Wyrwood vault socket on demand.
-model_provider = "xolotl"
+# model, notice and tui are settings, not constraints: in requirements.toml Codex ignored them.
+# The Xolotl model provider is a requirement (requirements.toml); the default model is not.
 model = "gpt-6-luna"
-
-[model_providers.xolotl]
-name = "Xolotl"
-base_url = "{{ xolotl_url }}/v1"
-wire_api = "responses"
-
-[model_providers.xolotl.auth]
-command = "bao"
-args = ["kv", "get", "-field=api_key", "kv/xolotl/keys/{{xolotl_key}}"]
 
 [notice]
 hide_full_access_warning = true
