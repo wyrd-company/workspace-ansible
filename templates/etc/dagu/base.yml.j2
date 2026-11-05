@@ -114,6 +114,10 @@ env:
 {% for name, value in automation_git_env.items() %}
   - {{ name }}: "{{ value }}"
 {% endfor %}
+  # Names the identity for the git shim (~/.local/bin/git, from workspace-dotfiles), which then
+  # runs git as `git automation`. It is not in automation_git_env, because git-automation
+  # exports that map and then runs git, which is the shim again: the shim would call it forever.
+  - GIT_OPERATOR: "automation"
 
 # -- Step Defaults --
 # Applied to every step unless the step overrides a field explicitly.

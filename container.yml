@@ -6,8 +6,10 @@
   vars:
     # Git over HTTPS as wyrd-automation[bot], for this playbook, for Dagu (templates/etc/dagu/base.yml.j2), and
     # for `git automation` (templates/usr/local/bin/git-automation.j2).
-    # Remotes are SSH URLs for humans and agents, who use them through `git <handle>`; the bot is a GitHub App,
-    # which has no SSH, so automation rewrites them to HTTPS. None of this is in ~/.gitconfig.
+    # Remotes are SSH URLs for humans and agents, who use them through `git <handle>` or a T3 thread's registered
+    # operator (`git operator`, workspace-dotfiles); the bot is a GitHub App, which has no SSH, so automation
+    # rewrites them to HTTPS. None of this is in ~/.gitconfig. Never add GIT_OPERATOR here: Dagu sets it on its own
+    # (base.yml.j2), and git-automation exporting it would loop through the git shim.
     automation_git_env:
       GH_LOGIN: "wyrd-automation[bot]"
       GIT_CONFIG_COUNT: "3"
