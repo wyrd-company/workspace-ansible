@@ -22,6 +22,12 @@
       GIT_COMMITTER_NAME: "wyrd-automation[bot]"
       GIT_COMMITTER_EMAIL: "350608332+wyrd-automation[bot]@users.noreply.github.com"
 
+    # The Wyrd plugin marketplace, kept up to date by every run of this playbook. Claude Code
+    # (managed-settings.json) and Codex (config.toml) read it as a local marketplace, so no session
+    # clones it at startup.
+    agent_marketplace_repo: https://github.com/wyrd-company/agent-marketplace.git
+    agent_marketplace_dir: /usr/local/share/agent-marketplace
+
   tasks:
     - name: Load variables from workspace options
       ansible.builtin.include_vars:
@@ -67,6 +73,15 @@
             owner: root
             group: root
             mode: '0755'
+
+        # Before the harness configs are used: both read the plugins from this checkout. Public, over HTTPS.
+        - name: Check out the Wyrd plugin marketplace
+          ansible.builtin.git:
+            repo: "{{ agent_marketplace_repo }}"
+            dest: "{{ agent_marketplace_dir }}"
+            version: main
+            depth: 1
+            update: true
 
         - name: Install the automation credential helper
           ansible.builtin.copy:
