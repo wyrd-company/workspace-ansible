@@ -1,17 +1,8 @@
 # System defaults for every Codex session: https://learn.chatgpt.com/docs/config-file/config-reference
 # Codex reads /etc/codex/config.toml (defaults), managed_config.toml and requirements.toml (constraints).
-# model, notice and tui are settings, not constraints: in requirements.toml Codex ignored them.
-# The Xolotl model provider is a requirement (requirements.toml); the default model is not.
-model = "gpt-6-luna"
-
-[notice]
-hide_full_access_warning = true
-hide_rate_limit_model_nudge = true
-
-[tui]
-status_line = ["model-with-reasoning", "current-dir", "context-window-size", "context-used", "used-tokens", "five-hour-limit", "weekly-limit", "codex-version", "thread-title", "task-progress"]
-status_line_use_colors = true
-screen_reader_detection_done = true
+# Only what Codex never writes to the user's ~/.codex/config.toml belongs here; a value Codex writes there
+# overrides this file for good. The notice and tui settings are in the user file, kept by a chezmoi
+# modify template (workspace-dotfiles); the model is the user's.
 
 # Wyrd plugins, from the checkout the playbook keeps at {{ agent_marketplace_dir }}. A local source,
 # so no session clones it: inside a T3 thread with no registered operator the git shim refuses git.

@@ -1,5 +1,6 @@
 # Constraints every Codex session must meet: https://learn.chatgpt.com/docs/enterprise/managed-configuration
-# Defaults users may change (model, notice, tui, plugins) are in config.toml.
+# The plugin marketplace and the git-operator hook are in config.toml; the notice and tui settings are in
+# the user's ~/.codex/config.toml (workspace-dotfiles); the model is the user's.
 
 # Models come from Xolotl; the client key is fetched through the Wyrwood vault socket on demand.
 model_provider = "xolotl"
