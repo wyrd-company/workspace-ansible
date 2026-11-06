@@ -1,0 +1,21 @@
+# System defaults for every Codex session: https://learn.chatgpt.com/docs/config-file/config-reference
+# Codex reads /etc/codex/config.toml (defaults), managed_config.toml and requirements.toml (constraints).
+# Only what Codex never writes to the user's ~/.codex/config.toml belongs here; a value Codex writes there
+# overrides this file for good. The notice and tui settings are in the user file, kept by a chezmoi
+# modify template (workspace-dotfiles); the model is the user's.
+
+# Wyrd plugins, from the checkout the playbook keeps at {{ agent_marketplace_dir }}. A local source,
+# so no session clones it: inside a T3 thread with no registered operator the git shim refuses git.
+[marketplaces.wyrd-company]
+source_type = "local"
+source = "{{ agent_marketplace_dir }}"
+
+# git-operator is a SessionStart hook. Codex runs a plugin's hook only after each user trusts it,
+# and trust is per user, so a system layer cannot grant it. A managed hook runs without review:
+# it runs the plugin's own script from the checkout. The git-operator plugin stays disabled, so
+# the hook cannot run twice.
+[[hooks.SessionStart]]
+[[hooks.SessionStart.hooks]]
+type = "command"
+command = "sh {{ agent_marketplace_dir }}/plugins/git-operator/scripts/session-start.sh"
+timeout = 10
