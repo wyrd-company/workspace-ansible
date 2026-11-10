@@ -36,7 +36,7 @@ interview:
       script: scripts/ensure-worktree
       args:
         - "/repos/tasks.git"
-        - "project/{{project}}"
+        - "{{project}}"
         - "tasks"
 
 messages:
