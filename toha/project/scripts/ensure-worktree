@@ -1,11 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Usage: ensure-worktree <bare> <branch> <path>
+# Usage: ensure-worktree <bare> <project> <path>
 #
-# Make sure <path> is a worktree of <branch> checked out from the bare clone
-# <bare>, one of the /repos clones workspace-ansible makes; it is required, not
-# created. A branch missing on the remote is created as an orphan branch with an
+# Make sure <path> is a worktree of the branch $WORKSPACE/<project> checked out
+# from the bare clone <bare>, one of the /repos clones workspace-ansible makes;
+# it is required, not created. WORKSPACE is the container's workspace name
+# (devcontainer containerEnv, the same value as `workspace` in
+# /etc/workspace/config.yml), so each workspace keeps its own branch of a
+# project. A branch missing on the remote is created as an orphan branch with an
 # empty initial commit and pushed. <path> is normally an empty bind-mount point
 # (it may hold the template's .gitkeep). A worktree that already exists is left
 # alone.
@@ -13,10 +16,16 @@ set -euo pipefail
 # Fetch, commit, and push go through `git automation` (wyrd-automation[bot] over
 # HTTPS): plain git over SSH is refused outside `git <handle>`.
 ensure_worktree() {
-    local usage="Usage: ${FUNCNAME[0]} <bare> <branch> <path>"
+    local usage="Usage: ${FUNCNAME[0]} <bare> <project> <path>"
     local bare=${1:?$usage}
-    local branch=${2:?$usage}
+    local project=${2:?$usage}
     local path=${3:?$usage}
+
+    if [[ -z "${WORKSPACE:-}" ]]; then
+        echo "Error: WORKSPACE is not set; apply this template inside a workspace container" >&2
+        return 1
+    fi
+    local branch="$WORKSPACE/$project"
 
     if ! git check-ref-format --branch "$branch" >/dev/null; then
         echo "Error: invalid branch name: $branch" >&2
