@@ -1,0 +1,40 @@
+# envconsul config for the mnemonic MCP server (the mnemonic plugin in wyrd-company/agent-marketplace,
+# scripts/mnemonic-mcp.sh). envconsul reads the workspace's Xolotl key from Vault and sets it as
+# EMBED_API_KEY for the server process alone; no file or global variable holds it. This file holds
+# no secret.
+#
+# The Vault address comes from VAULT_ADDR, the Wyrwood socket, which needs no token. Codex passes
+# MCP servers only a few variables, so its [mcp_servers.mnemonic] entry (/etc/codex/config.toml)
+# forwards VAULT_ADDR and the others the server needs.
+
+vault {
+  # Wyrwood authenticates requests on the socket; there is no token to renew.
+  renew_token = false
+}
+
+# Only api_key: the secret also holds the key's name, policy and client id.
+secret {
+  path      = "kv/data/xolotl/keys/{{ xolotl_key }}"
+  no_prefix = true
+
+  key {
+    name   = "api_key"
+    format = "EMBED_API_KEY"
+  }
+}
+
+exec {
+  env {
+    # mnemonic posts to new URL("/v1/embeddings", EMBED_BASE_URL), which drops any path in the base
+    # URL, so the base is Xolotl's root and the provider goes in the model name: Xolotl routes
+    # vercel/<model> to its Vercel AI Gateway provider. The key's policy must allow it.
+    # After changing the model or dimensions, run mnemonic's `sync` tool with force: true.
+    custom = [
+      "VAULT_PATH=/home/vscode/mnemonic-vault",
+      "EMBED_PROVIDER=openai-compatible",
+      "EMBED_BASE_URL={{ xolotl_url }}",
+      "EMBED_MODEL=vercel/voyage/voyage-4",
+      "EMBED_DIMENSIONS=1024",
+    ]
+  }
+}
