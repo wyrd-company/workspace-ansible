@@ -19,3 +19,15 @@ source = "{{ agent_marketplace_dir }}"
 type = "command"
 command = "sh {{ agent_marketplace_dir }}/plugins/git-operator/scripts/session-start.sh"
 timeout = 10
+
+# The mnemonic memory server. Like the hook above, it runs the plugin's script from the checkout:
+# a system layer cannot install a plugin for each user. The script starts the server under
+# envconsul with /etc/mnemonic/config.hcl, which reads the Xolotl embedding key from Vault.
+# Codex gives an MCP server only HOME, PATH, USER and a few more variables; env_vars forwards the
+# Vault socket and homelab CA (envconsul, embeddings), and the thread id and SSH agent, so the git
+# shim commits mnemonic's notes as the thread's operator. The shim reads the thread registry under
+# XDG_STATE_HOME when it is set, and under $HOME/.local/state otherwise.
+[mcp_servers.mnemonic]
+command = "sh"
+args = ["{{ agent_marketplace_dir }}/plugins/mnemonic/scripts/mnemonic-mcp.sh"]
+env_vars = ["VAULT_ADDR", "NODE_EXTRA_CA_CERTS", "T3CODE_THREAD_ID", "SSH_AUTH_SOCK", "GIT_OPERATOR", "XDG_STATE_HOME"]
