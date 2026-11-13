@@ -31,6 +31,11 @@ interview:
         - "{{project}}"
         - "memory"
 
+  - hook:
+      script: scripts/ensure-memory-gitignore
+      args:
+        - "memory"
+
   - message: "Checking out or creating {{project}} tasks..."
   - hook:
       script: scripts/ensure-worktree

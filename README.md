@@ -13,3 +13,9 @@ keeps its own remote and history.
 
 The generated ignore rules exclude nested clones and worktrees while keeping
 the setup files and template record available for version control.
+
+The `project` template also adds a `.mnemonic` exception to `memory/.gitignore`,
+so shared memories can be tracked even when a user's global ignore file excludes
+`.mnemonic/`. Reapplying the template repairs existing memory worktrees without
+replacing their ignore rules. Mnemonic's own exclusions inside `.mnemonic/`
+continue to apply.
