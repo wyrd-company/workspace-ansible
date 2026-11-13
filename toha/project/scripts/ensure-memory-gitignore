@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Run after ensure-worktree, including when the memory worktree already exists.
+path=${1:?Usage: ensure-memory-gitignore <memory-worktree>}
+if [[ ! -e "$path/.git" ]]; then
+    echo "Error: no memory worktree at $path" >&2
+    exit 1
+fi
+
+ignore="$path/.gitignore"
+rules=$'# Track shared memories even when .mnemonic is ignored globally.\n!/.mnemonic/\n!/.mnemonic/**'
+
+# Keep the override last so earlier rules cannot hide the memory directory.
+if [[ ! -f "$ignore" ]] || [[ $(tail -n 3 -- "$ignore") != "$rules" ]]; then
+    printf '\n%s\n' "$rules" >> "$ignore"
+fi
