@@ -144,14 +144,6 @@
             # Not in a repository, so the shim can't take the owner from a remote
             GH_OWNER: "{{org}}"
 
-        # managedMcpServers rejects headersHelper; managed-mcp.json would disable plugin servers.
-        - name: Configure the Xolotl MCP server for Claude Code
-          ansible.builtin.include_tasks:
-            file: tasks/configure_claude_mcp.yml
-            apply:
-              environment:
-                PATH: "{{ lookup('env', 'PATH') }}"
-
         # Repos run after the dotfiles: the gh shim and its app-token config come from them
         - name: Clone and check out repositories as wyrd-automation[bot]
           # PATH as in "Apply dotfiles": init_local_workflows.yml runs toha from brew
