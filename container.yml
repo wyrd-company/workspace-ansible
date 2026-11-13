@@ -76,6 +76,14 @@
             group: root
             mode: '0755'
 
+        - name: Install the Xolotl MCP header helper
+          ansible.builtin.template:
+            src: templates/usr/local/bin/xolotl-mcp-headers.j2
+            dest: /usr/local/bin/xolotl-mcp-headers
+            owner: root
+            group: root
+            mode: '0755'
+
         # Before the harness configs are used: both read the plugins from this checkout. Public, over HTTPS.
         - name: Check out the Wyrd plugin marketplace
           ansible.builtin.git:

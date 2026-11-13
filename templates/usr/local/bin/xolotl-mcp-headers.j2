@@ -1,0 +1,8 @@
+#!/bin/sh
+set -eu
+export PATH="${PATH:-/usr/bin:/bin}:/home/linuxbrew/.linuxbrew/bin"
+
+# Both clients expect a JSON object of headers. Keep the key in this process and on
+# stdin to jq; it must not be written to a config file or passed as a command argument.
+key="$(bao kv get -field=api_key 'kv/xolotl/keys/{{ xolotl_key }}')"
+printf '%s' "$key" | jq -Rse 'select(length > 0) | {Authorization: ("Bearer " + .)}'

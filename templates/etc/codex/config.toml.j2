@@ -31,3 +31,8 @@ timeout = 10
 command = "sh"
 args = ["{{ agent_marketplace_dir }}/plugins/mnemonic/scripts/mnemonic-mcp.sh"]
 env_vars = ["VAULT_ADDR", "NODE_EXTRA_CA_CERTS", "T3CODE_THREAD_ID", "SSH_AUTH_SOCK", "GIT_OPERATOR", "XDG_STATE_HOME"]
+
+# Fetch the workspace key through Wyrwood when connecting, including after key rotation.
+[mcp_servers.xolotl]
+url = "{{ xolotl_url }}/mcp"
+http_headers_helper = "/usr/local/bin/xolotl-mcp-headers"
