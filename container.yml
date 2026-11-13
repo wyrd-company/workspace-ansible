@@ -76,6 +76,14 @@
             group: root
             mode: '0755'
 
+        - name: Install the Xolotl MCP header helper
+          ansible.builtin.template:
+            src: templates/usr/local/bin/xolotl-mcp-headers.j2
+            dest: /usr/local/bin/xolotl-mcp-headers
+            owner: root
+            group: root
+            mode: '0755'
+
         # Before the harness configs are used: both read the plugins from this checkout. Public, over HTTPS.
         - name: Check out the Wyrd plugin marketplace
           ansible.builtin.git:
@@ -135,6 +143,14 @@
             GH_LOGIN: "{{ automation_git_env.GH_LOGIN }}"
             # Not in a repository, so the shim can't take the owner from a remote
             GH_OWNER: "{{org}}"
+
+        # managedMcpServers rejects headersHelper; managed-mcp.json would disable plugin servers.
+        - name: Configure the Xolotl MCP server for Claude Code
+          ansible.builtin.include_tasks:
+            file: tasks/configure_claude_mcp.yml
+            apply:
+              environment:
+                PATH: "{{ lookup('env', 'PATH') }}"
 
         # Repos run after the dotfiles: the gh shim and its app-token config come from them
         - name: Clone and check out repositories as wyrd-automation[bot]

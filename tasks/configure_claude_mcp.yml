@@ -1,0 +1,39 @@
+---
+- name: Check for Claude Code user configuration
+  ansible.builtin.stat:
+    path: "{{ claude_user_config_path | default('/home/vscode/.claude.json') }}"
+  register: claude_user_config_file
+
+- name: Read Claude Code user configuration
+  ansible.builtin.slurp:
+    src: "{{ claude_user_config_path | default('/home/vscode/.claude.json') }}"
+  register: claude_user_config
+  when: claude_user_config_file.stat.exists
+  no_log: true
+
+- name: Add or update the Xolotl MCP server in Claude Code user scope
+  vars:
+    xolotl_mcp_server:
+      type: http
+      url: "{{ xolotl_url }}/mcp"
+      headersHelper: /usr/local/bin/xolotl-mcp-headers
+    current_claude_config: "{{ (claude_user_config.content | b64decode | from_json) if claude_user_config_file.stat.exists else {} }}"
+  when: current_claude_config.get('mcpServers', {}).get('xolotl') != xolotl_mcp_server
+  block:
+    - name: Remove an outdated Xolotl MCP entry from Claude Code user scope
+      ansible.builtin.command:
+        argv: [claude, mcp, remove, --scope, user, xolotl]
+      when: "'xolotl' in current_claude_config.get('mcpServers', {})"
+      changed_when: true
+
+    - name: Add the Xolotl MCP entry to Claude Code user scope
+      ansible.builtin.command:
+        argv:
+          - claude
+          - mcp
+          - add-json
+          - --scope
+          - user
+          - xolotl
+          - "{{ xolotl_mcp_server | to_json }}"
+      changed_when: true
