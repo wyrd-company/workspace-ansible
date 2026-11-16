@@ -36,8 +36,11 @@ subjects:
       payload: '{"REF": payload.ref, "SHA": payload.after}'
     consumer:
       deliver_policy: new
-      # Without a backoff the five attempts follow each other at once
-      backoff: [10s, 1m, 5m, 15m]
+      # Without a backoff the five attempts follow each other at once. JetStream uses
+      # backoff[0] as the first ack deadline, and trowel does not extend it while the
+      # command runs, so keep it well above the command's timeout: a redelivery while
+      # an enqueue still runs would queue a second apply.
+      backoff: [1m, 5m, 15m, 30m]
     destinations:
       - name: dagu
         command:
@@ -50,4 +53,6 @@ subjects:
             - /etc/dagu/config.yml
             - --params-stdin
             - /workflows/main/sub-dags/{{relay.dag}}.yml
+          # An enqueue takes well under a second; below backoff[0], see above
+          timeout: 20s
 {% endfor %}
