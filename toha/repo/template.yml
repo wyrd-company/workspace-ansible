@@ -5,6 +5,8 @@ requires:
   - git
   - program: git-automation
     hint: Installed by workspace-ansible; apply this template inside a workspace container
+  - program: ensure-t3-project
+    hint: Installed by workspace-ansible; apply this template inside a workspace container
 
 interview:
   - id: repo
@@ -41,3 +43,22 @@ interview:
         - "git@github.com:{{org}}/{{repo}}.git"
         - "{{repo}}.git"
         - "{{branch}}"
+
+  - message: "Registering {{repo}} as a T3 Code project..."
+  - hook:
+      run:
+        - ensure-t3-project
+        - --icon-from
+        - "{{branch}}"
+        - "."
+        - "{{repo}}"
+
+messages:
+  after-apply: |
+    {{org}}/{{repo}} setup complete.
+
+    T3 Code has a project for this folder, named {{repo}}. When the {{branch}}
+    worktree ships an icon, t3.json here points the project at it. When it does
+    not, give the project an icon that fits the repository: a Lucide icon, or an
+    emoji or a monogram when no Lucide icon fits. An agent sets it with the T3
+    tool `t3_project_update` (`projectIcon`); the T3 Code app can set it too.

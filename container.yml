@@ -115,6 +115,15 @@
             group: root
             mode: '0755'
 
+        # On PATH: the hooks of the toha templates register project and repo folders as T3 Code projects
+        - name: Install ensure-t3-project
+          ansible.builtin.copy:
+            src: templates/usr/local/bin/ensure-t3-project
+            dest: /usr/local/bin/ensure-t3-project
+            owner: root
+            group: root
+            mode: '0755'
+
         # The homelab CA is bind-mounted read-only into /usr/local/share/ca-certificates at run time, so the image's
         # trust store does not have it. Every start and every ansible-sync rebuilds the store from that directory.
         - name: Refresh the CA trust store

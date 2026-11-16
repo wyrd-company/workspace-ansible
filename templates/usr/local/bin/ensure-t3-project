@@ -1,0 +1,141 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Usage: ensure-t3-project [--workspace] [--icon-from <dir>] <path> <title>
+#
+# Register <path> as a T3 Code project named <title>, unless a project already
+# has that workspace root: an existing project keeps its title. The toha
+# `project` and `repo` templates call this as a hook.
+#
+# --workspace puts the workspace's display name, WORKSPACE_NAME (devcontainer
+# containerEnv, `name` in /etc/workspace/config.yml), before <title>, as the
+# project template does for a project folder.
+#
+# --icon-from <dir> looks for an icon in <dir>, which must be inside <path>,
+# and records it as `iconPath` in <path>/t3.json, which T3 Code reads for the
+# project's icon. The repo template passes the default branch worktree, so a
+# repo folder shows the icon its repository ships. An `iconPath` that still
+# exists is left alone, as are the file's other keys.
+#
+# Does nothing, successfully, where it should not register anything: without
+# the t3 CLI, and in the temporary checkout toha's --update and --baseline
+# modes run hooks in.
+
+# T3 Code's own icon locations, in its order, then where our repositories keep
+# theirs: the user docs' assets.
+ICON_CANDIDATES=(
+    favicon.svg favicon.ico favicon.png
+    public/favicon.svg public/favicon.ico public/favicon.png
+    app/favicon.ico app/favicon.png app/icon.svg app/icon.png app/icon.ico
+    src/favicon.ico src/favicon.svg src/app/favicon.ico src/app/icon.svg src/app/icon.png
+    assets/icon.svg assets/icon.png assets/logo.svg assets/logo.png
+    .idea/icon.svg Resources/AppIcon.icns AppIcon.icns
+    docs/user/assets/favicon.svg docs/user/assets/brand/favicon.svg
+    docs/user/assets/icon.svg docs/user/assets/brand/icon.svg
+    docs/user/assets/logo.svg docs/user/assets/brand/logo.svg
+    docs/assets/favicon.svg docs/user/assets/favicon.ico docs/assets/favicon.ico
+)
+
+usage() {
+    echo "Usage: ensure-t3-project [--workspace] [--icon-from <dir>] <path> <title>" >&2
+    exit 2
+}
+
+# Prints the path of <dir>'s icon relative to <dir>, or nothing
+find_icon() {
+    local dir=$1 candidate
+    if [[ -f "$dir/t3.json" ]]; then
+        candidate=$(jq -r '.iconPath // empty' "$dir/t3.json" 2>/dev/null || true)
+        if [[ -n "$candidate" && -f "$dir/$candidate" ]]; then
+            echo "$candidate"
+            return
+        fi
+    fi
+    for candidate in "${ICON_CANDIDATES[@]}"; do
+        if [[ -f "$dir/$candidate" ]]; then
+            echo "$candidate"
+            return
+        fi
+    done
+}
+
+# Sets iconPath in <root>/t3.json unless it names a file that exists
+record_icon() {
+    local root=$1 icon=$2 file=$1/t3.json current tmp
+    if [[ -f "$file" ]]; then
+        current=$(jq -r '.iconPath // empty' "$file")
+        if [[ -n "$current" && -f "$root/$current" ]]; then
+            echo "Keeping the icon $current in $file"
+            return
+        fi
+    fi
+    tmp=$(mktemp "$file.XXXXXX")
+    if [[ -f "$file" ]]; then
+        jq --arg icon "$icon" '.iconPath = $icon' "$file" >"$tmp"
+    else
+        jq -n --arg icon "$icon" '{iconPath: $icon}' >"$tmp"
+    fi
+    chmod 0644 "$tmp"
+    mv "$tmp" "$file"
+    echo "Set the T3 project icon to $icon"
+}
+
+main() {
+    local icon_from="" workspace=false
+    while [[ "${1:-}" == --* ]]; do
+        case $1 in
+            --workspace) workspace=true; shift ;;
+            --icon-from) [[ $# -ge 2 ]] || usage; icon_from=$2; shift 2 ;;
+            *) usage ;;
+        esac
+    done
+    [[ $# -eq 2 && -n "$1" && -n "$2" ]] || usage
+    local root title=$2 tmp
+    if $workspace; then
+        if [[ -z "${WORKSPACE_NAME:-}" ]]; then
+            echo "Error: WORKSPACE_NAME is not set; run this inside a workspace container" >&2
+            return 1
+        fi
+        title="$WORKSPACE_NAME $title"
+    fi
+    root=$(realpath -- "$1")
+    tmp=$(realpath -m -- "${TMPDIR:-/tmp}")
+
+    if [[ "$root/" == "$tmp/"* ]]; then
+        echo "Not registering a T3 project for the temporary checkout $root"
+        return 0
+    fi
+    if ! command -v t3 >/dev/null; then
+        echo "No t3 CLI; not registering $root as a T3 project"
+        return 0
+    fi
+
+    if [[ -n "$icon_from" ]]; then
+        local from icon
+        from=$(realpath -- "$icon_from")
+        if [[ "$from/" != "$root/"* ]]; then
+            echo "Error: $icon_from is not inside $root" >&2
+            return 1
+        fi
+        icon=$(find_icon "$from")
+        if [[ -n "$icon" ]]; then
+            local rel=${from#"$root"}
+            rel=${rel#/}
+            record_icon "$root" "${rel:+$rel/}$icon"
+        else
+            echo "No icon in $icon_from; the T3 project gets the default"
+        fi
+    fi
+
+    local output
+    if output=$(t3 project add "$root" --title "$title" 2>&1); then
+        echo "$output"
+    elif [[ "$output" == *ProjectAlreadyExistsError* ]]; then
+        echo "Already a T3 project; leaving its title: $root"
+    else
+        echo "$output" >&2
+        return 1
+    fi
+}
+
+main "$@"

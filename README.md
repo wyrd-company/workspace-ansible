@@ -26,6 +26,18 @@ and records its application in the project's `.toha.json`, without asking for a
 separate remote or initializing another setup repository. The cloned repository
 keeps its own remote and history.
 
+Both templates register their folder as a T3 Code project through
+`ensure-t3-project`, which the playbook installs in `/usr/local/bin`. A project
+folder is named `$WORKSPACE_NAME <project>`, and its after-apply message asks for
+an icon to be set with T3's `t3_project_update`, since the `t3` CLI cannot set
+one. A repo folder is named for the repository; when the default branch
+worktree has an icon, in one of T3 Code's own locations or under
+`docs/user/assets/`, the hook records it as `iconPath` in the repo folder's
+`t3.json`; without one, the after-apply message asks for an icon as for a
+project folder. A folder that is already a T3 project keeps its title. The hook skips
+the temporary checkouts of toha's `--update` and `--baseline` modes, and does
+nothing where there is no `t3` CLI.
+
 The generated ignore rules exclude nested clones and worktrees while keeping
 the setup files and template record available for version control.
 
