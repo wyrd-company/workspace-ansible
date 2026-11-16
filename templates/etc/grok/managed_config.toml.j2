@@ -1,0 +1,43 @@
+# System defaults for every Grok session: docs/user-guide/26-config-reference.md in https://github.com/xai-org/grok-build
+# Grok reads /etc/grok/managed_config.toml; a value in the user's ~/.grok/config.toml overrides it, and
+# requirements.toml (not used here) pins values. The UI, permission and update settings are in the user
+# file, kept by a chezmoi modify template (workspace-dotfiles); the model is the user's.
+
+# Models come from Xolotl; the key is fetched through the Wyrwood vault socket on demand, by the same
+# helper family as Codex and Claude Code. Responses API, as Codex uses.
+[auth_provider.xolotl]
+command = "/usr/local/bin/xolotl-api-key"
+token_ttl_secs = 3600
+
+[endpoints]
+models_base_url = "{{ xolotl_url }}/v1"
+
+[model."grok-4.7"]
+model = "grok-4.7"
+base_url = "{{ xolotl_url }}/v1"
+name = "Grok 4.7 (Xolotl)"
+api_backend = "responses"
+auth_provider = "xolotl"
+
+[models]
+default = "grok-4.7"
+
+# git-operator is a SessionStart hook: it tells the agent which git operator this T3 thread commits as.
+# Declared here, as for Codex, rather than as a plugin: a system layer cannot install or trust a plugin for
+# each user. It runs the plugin's own script from the checkout and prints its context on stdout.
+[[hooks.SessionStart]]
+hooks = [{ type = "command", command = "sh {{ agent_marketplace_dir }}/plugins/git-operator/scripts/session-start.sh", timeout = 10 }]
+
+# The mnemonic memory server, run from the checkout like the hook above (see /etc/codex/config.toml).
+# Grok expands ${VAR} when it loads the config. It does not say whether a stdio server inherits Grok's
+# environment, so the Vault socket, homelab CA, thread id and SSH agent that the server and the git shim
+# need are passed explicitly.
+[mcp_servers.mnemonic]
+command = "sh"
+args = ["{{ agent_marketplace_dir }}/plugins/mnemonic/scripts/mnemonic-mcp.sh"]
+env = { VAULT_ADDR = "${VAULT_ADDR:-}", NODE_EXTRA_CA_CERTS = "${NODE_EXTRA_CA_CERTS:-}", T3CODE_THREAD_ID = "${T3CODE_THREAD_ID:-}", SSH_AUTH_SOCK = "${SSH_AUTH_SOCK:-}", XDG_STATE_HOME = "${XDG_STATE_HOME:-}" }
+
+# Grok also imports ~/.claude.json's servers. Its Xolotl entry uses Claude's headersHelper, which Grok
+# does not run, so that import would reach Xolotl without a key.
+[compat.claude]
+mcps = false

@@ -24,6 +24,11 @@ of the host's shared cargo cache, so the cap reaches every workspace on the host
 Override it for one build with `-j N` or `CARGO_BUILD_JOBS=N`.
 Workspaces without Rust have no cargo home, and the playbook skips the cap there.
 
+Grok reads `/etc/grok/managed_config.toml`: the grok-4.7 model route through Xolotl (the
+key comes from `/usr/local/bin/xolotl-api-key`, which reads it through Wyrwood on demand), the
+git-operator SessionStart hook and the mnemonic MCP server. Grok has no headers helper for
+remote MCP servers, so it has no Xolotl MCP connection yet.
+
 The installed Toha `project` template asks for an optional remote URL. Toha
 initializes the project as a Git repository even when the URL is empty, so it can
 save `.toha.json` for template tracking and updates. A target already inside a
