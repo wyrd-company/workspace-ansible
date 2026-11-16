@@ -66,6 +66,20 @@
             group: root
             mode: '0644'
           loop: "{{ template_files.files }}"
+          register: rendered_templates
+
+        # Trowel rereads its configuration on its own only while it can watch the file, and a
+        # container that has run out of inotify instances cannot. At startup trowel is not running
+        # yet (it waits for ansible-setup), so reload only a supervised service.
+        - name: Reload trowel when its configuration changed
+          ansible.builtin.shell:
+            cmd: |
+              if /command/s6-svok /run/service/trowel; then
+                /command/s6-svc -h /run/service/trowel
+              fi
+          when: >-
+            rendered_templates.results | selectattr('changed')
+            | map(attribute='dest') | select('match', '/etc/trowel/') | list | length > 0
 
         # On PATH, so `git automation <cmd>` works; the hooks of the toha templates use it
         - name: Install git-automation
