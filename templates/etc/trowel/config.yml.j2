@@ -12,26 +12,42 @@ nats:
   # The workspace user's .creds, shared by every workspace (homelab repo, role nats)
   creds_vault: {path: homelab/nats/workspace, field: creds}
 
+# Pushes to the workspace's own repositories enqueue the workspace-update DAGs
+# (workflows repo, main, /workflows/main/sub-dags/workspace-update-*.yml), which
+# apply them.
+#
+# The homelab relay publishes GitHub webhooks to stream GITHUB as
+# github.<owner>.<repo>.<event>.<action>, and a push has no action, so a subject
+# names every push to a repository, whatever the branch. The DAGs skip pushes
+# that are not to main: the transform passes them the ref and head commit as
+# Dagu params, a JSON object on stdin.
+#
+# Each relay has a durable consumer per destination, relay-<name>-<destination>.
+# deliver_policy new: on first start, do not replay the stream's 30 days of pushes.
 subjects:
-  - name: {{workspace}}-ansible
-    subject: webhooks.github.{{org}}.workspace-ansible.release.new
+{% for relay in [
+  {'name': 'ansible', 'repo': 'workspace-ansible', 'dag': 'workspace-update-ansible'},
+  {'name': 'dotfiles', 'repo': 'workspace-dotfiles', 'dag': 'workspace-update-dotfiles'},
+  {'name': 'skills', 'repo': 'skills', 'dag': 'workspace-update-dotfiles'},
+] %}
+  - name: {{workspace}}-{{relay.name}}
+    subject: github.{{org}}.{{relay.repo}}.push.none
+    transform:
+      payload: '{"REF": payload.ref, "SHA": payload.after}'
+    consumer:
+      deliver_policy: new
+      # Without a backoff the five attempts follow each other at once
+      backoff: [10s, 1m, 5m, 15m]
     destinations:
-      - name: sync
+      - name: dagu
         command:
+          # Dagu's own configuration, so base.yml and the queues are the server's. The DAG by
+          # path: enqueue finds a bare name only in dags_dir, not in the sub-dags.
           argv:
-            - sudo
-            - ansible-sync
-          # ansible-sync reruns the whole playbook; the 60s default would kill it
-          timeout: 30m
-  - name: {{workspace}}-dotfiles
-    subject: webhooks.github.{{org}}.workspace-dotfiles.main.push
-    destinations:
-      - name: chezmoi
-        command:
-          argv:
-            - chezmoi
-            - update
-            - --init
-          dir: /home/vscode
-          env:
-            BAO_ADDR: unix:///run/wyrwood/vault.sock
+            - /usr/local/bin/dagu
+            - enqueue
+            - --config
+            - /etc/dagu/config.yml
+            - --params-stdin
+            - /workflows/main/sub-dags/{{relay.dag}}.yml
+{% endfor %}
