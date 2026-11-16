@@ -1,13 +1,16 @@
 server:
-  listen: 9090
+  listen: ":9090"
+
+# The Wyrwood socket adds the container's token, so no auth section.
+vault:
+  address: unix:///run/wyrwood/vault.sock
+  kv_mount: kv
 
 nats:
   url: {{nats_url}}
   name: {{workspace}}-trowel
-  creds_vault:
-    address: unix:///run/wyrwood/vault.sock
-    auth:
-      approle:
+  # The workspace user's .creds, shared by every workspace (homelab repo, role nats)
+  creds_vault: {path: homelab/nats/workspace, field: creds}
 
 subjects:
   - name: {{workspace}}-ansible
