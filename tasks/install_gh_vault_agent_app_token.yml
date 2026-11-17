@@ -2,8 +2,10 @@
 # Installs or upgrades the gh-vault-agent-app-token extension from its latest release, laid out as
 # `gh extension install` would (binary + manifest.yml), so `gh extension upgrade` keeps working.
 # Not left to the dotfiles: the gh shim needs it to mint the token any authenticated gh call uses.
-# Both the release lookup and the download are anonymous. ~/.local/share/gh/extensions is a shared
-# cache mount, so another workspace may already have installed it.
+# The latest tag comes from the redirect of the releases/latest page, not the GitHub API: we make
+# no anonymous API calls, and until this extension is installed gh has no identity to call it with.
+# ~/.local/share/gh/extensions is a shared cache mount, so another workspace may already have
+# installed it.
 
 - name: Define extension paths
   ansible.builtin.set_fact:
@@ -18,13 +20,21 @@
 
 - name: Look up the latest extension release
   ansible.builtin.uri:
-    url: https://api.github.com/repos/wyrd-company/gh-vault-agent-app-token/releases/latest
-  register: _ext_release
+    url: https://github.com/wyrd-company/gh-vault-agent-app-token/releases/latest
+    method: HEAD
+    follow_redirects: none
+    status_code: 302
+  register: _ext_latest
+
+- name: Read the latest release tag from the redirect
+  ansible.builtin.set_fact:
+    _ext_tag: "{{ _ext_latest.location | urlsplit('path') | basename }}"
+  failed_when: "'/releases/tag/' not in _ext_latest.location"
 
 - name: Install the latest extension release
   when: >-
     _ext_manifest.content is not defined
-    or (_ext_manifest.content | b64decode | from_yaml).tag != _ext_release.json.tag_name
+    or (_ext_manifest.content | b64decode | from_yaml).tag != _ext_tag
   block:
     - name: Create the extension directory
       ansible.builtin.file:
@@ -34,7 +44,7 @@
 
     - name: Download the extension binary
       ansible.builtin.get_url:
-        url: "https://github.com/wyrd-company/gh-vault-agent-app-token/releases/download/{{ _ext_release.json.tag_name }}/gh-vault-agent-app-token_{{ _ext_release.json.tag_name }}_linux-{{ _ext_arch }}"
+        url: "https://github.com/wyrd-company/gh-vault-agent-app-token/releases/download/{{ _ext_tag }}/gh-vault-agent-app-token_{{ _ext_tag }}_linux-{{ _ext_arch }}"
         dest: "{{ _ext_dir }}/gh-vault-agent-app-token"
         mode: '0755'
         force: true
@@ -47,6 +57,6 @@
           owner: wyrd-company
           name: gh-vault-agent-app-token
           host: github.com
-          tag: {{ _ext_release.json.tag_name }}
+          tag: {{ _ext_tag }}
           ispinned: false
           path: {{ _ext_dir }}/gh-vault-agent-app-token
