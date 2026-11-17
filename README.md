@@ -16,6 +16,11 @@ would disable plugin servers such as mnemonic. Root configuration belongs here;
 user configuration belongs in workspace-dotfiles. Run `ansible-sync` to apply
 the configuration to an existing workspace, then start a new client session.
 
+The playbook owns `$CARGO_HOME/config.toml` and caps cargo at 4 parallel compile
+jobs, since agents build at once. `CARGO_HOME` (`/usr/local/cargo`) is a bind mount
+of the host's shared cargo cache, so the cap reaches every workspace on the host.
+Override it for one build with `-j N` or `CARGO_BUILD_JOBS=N`.
+
 The installed Toha `project` template asks for an optional remote URL. Toha
 initializes the project as a Git repository even when the URL is empty, so it can
 save `.toha.json` for template tracking and updates. A target already inside a

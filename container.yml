@@ -137,6 +137,22 @@
       become: true
       become_user: vscode
       block:
+        # Cargo ===============================================================
+
+        # Parallel agent builds saturated the CPU. CARGO_HOME (/usr/local/cargo) is a bind mount of the host's shared
+        # cargo cache, so this one file caps every workspace on the host and survives rebuilds; ~/.cargo/config.toml
+        # would apply only to builds under the home folder. Cargo never writes this file, so the playbook owns it.
+        - name: Cap parallel cargo build jobs
+          ansible.builtin.copy:
+            dest: "{{ lookup('env', 'CARGO_HOME') | default('/usr/local/cargo', true) }}/config.toml"
+            mode: '0644'
+            content: |
+              # Managed by workspace-ansible (container.yml); edits here are overwritten.
+              # Caps parallel compile jobs: agents build at once on a shared host.
+              # Override for one build with `-j N` or `CARGO_BUILD_JOBS=N`.
+              [build]
+              jobs = 4
+
         # GitHub CLI ==========================================================
 
         - name: Install or upgrade gh-vault-agent-app-token
