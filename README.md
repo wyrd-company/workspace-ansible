@@ -58,7 +58,9 @@ relay consumes the deck service's `DECK` stream (`deck.>`) and runs
 `deck resolve` against the workspace's own deck store, from the client
 configuration workspace-dotfiles manages, and sends each resolved session with a
 `T3CODE_THREAD_ID` a notice through `t3 thread send`, asking it to run
-`deck read`. The notice carries no Discord content. Activity in a thread no local
+`deck read`. The notice carries no Discord content. Discord's thread starter
+reference (message type 21), which opens a thread started from a text channel
+message, is skipped, so a post does not wake the thread that made it. Activity in a thread no local
 session touched resolves to no session and wakes nothing, so every workspace can
 consume every event. A failed resolve or send fails the delivery, and Trowel
 retries it. Run `DECK_WAKE_T3_DRY_RUN=1 deck-wake-t3 < activity.json` to see the

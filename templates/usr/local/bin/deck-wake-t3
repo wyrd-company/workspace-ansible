@@ -16,6 +16,12 @@ set -euo pipefail
 # its cursor. Sessions without a T3 thread, such as a Claude Code session run
 # outside T3, are skipped.
 #
+# A thread started from a message in a text or announcement channel opens with
+# Discord's thread starter reference, a message of type 21 that carries no
+# content, key or nonce, so `deck resolve` cannot tell it is the creating
+# session's own and returns that session. It is skipped: when it arrives, the
+# only session tied to a thread that new is the one whose post created it.
+#
 # Exits non-zero when resolving or a send fails, so Trowel redelivers the
 # event. A redelivery notifies every session again, including any already
 # notified. Does nothing, successfully, without the deck or t3 CLI or a deck
@@ -46,6 +52,10 @@ if [ ! -e "${config}" ]; then
 fi
 
 event=$(cat)
+
+if [ "$(printf '%s' "${event}" | jq -r '.message.type // 0')" = 21 ]; then
+    exit 0
+fi
 
 sessions=$(printf '%s' "${event}" | deck resolve "${deck_args[@]}" --event - --json)
 
