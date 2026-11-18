@@ -57,3 +57,24 @@ subjects:
           # An enqueue takes well under a second; below backoff[0], see above
           timeout: 20s
 {% endfor %}
+
+  # Discord activity in threads that deck touched (deck service, stream DECK, subjects
+  # deck.<server>.<channel>.<thread>) wakes the T3 Code threads that posted or replied
+  # there. Every workspace consumes every event; deck-wake-t3 resolves the thread
+  # against this workspace's own deck store, so a thread no local session touched is
+  # a successful no-op. See templates/usr/local/bin/deck-wake-t3.
+  - name: {{workspace}}-deck
+    subject: deck.>
+    consumer:
+      # On first start, do not wake threads for the stream's week of old activity
+      deliver_policy: new
+      # backoff[0] is the first ack deadline; keep it above the command's timeout,
+      # as above, so a slow send is not notified twice.
+      backoff: [1m, 5m, 15m, 30m]
+    destinations:
+      - name: t3
+        command:
+          argv:
+            - /usr/local/bin/deck-wake-t3
+          # A resolve reads only the local store, and a send queues a turn without waiting for it
+          timeout: 30s

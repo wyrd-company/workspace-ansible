@@ -124,6 +124,15 @@
             group: root
             mode: '0755'
 
+        # Trowel runs it for deck activity (templates/etc/trowel/config.yml.j2) to wake T3 Code threads
+        - name: Install deck-wake-t3
+          ansible.builtin.copy:
+            src: templates/usr/local/bin/deck-wake-t3
+            dest: /usr/local/bin/deck-wake-t3
+            owner: root
+            group: root
+            mode: '0755'
+
         # The homelab CA is bind-mounted read-only into /usr/local/share/ca-certificates at run time, so the image's
         # trust store does not have it. Every start and every ansible-sync rebuilds the store from that directory.
         - name: Refresh the CA trust store

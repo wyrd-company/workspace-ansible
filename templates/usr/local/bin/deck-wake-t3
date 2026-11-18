@@ -1,0 +1,79 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Usage: deck-wake-t3 [--config PATH] < activity.json
+#
+# Wake the T3 Code threads that a deck activity event is for. Trowel runs this
+# for every event on the DECK stream (templates/etc/trowel/config.yml.j2) with
+# the event's JSON on stdin; see deck's "Events and session relays"
+# documentation, https://wyrd.foo/docs/deck/events.
+#
+# `deck resolve` maps the event's Discord thread to the local sessions that
+# posted or replied in it, leaving out the session that sent the message
+# itself. Each session with a T3CODE_THREAD_ID identifier gets a notice through
+# `t3 thread send`; a busy thread gets it as its next turn. The notice carries
+# no Discord content: the agent reads it with `deck read`, which also advances
+# its cursor. Sessions without a T3 thread, such as a Claude Code session run
+# outside T3, are skipped.
+#
+# Exits non-zero when resolving or a send fails, so Trowel redelivers the
+# event. A redelivery notifies every session again, including any already
+# notified. Does nothing, successfully, without the deck or t3 CLI or a deck
+# client configuration.
+#
+# --config selects the deck client configuration, and so its store; the
+# default is deck's own, ~/.config/deck/config.yml, which workspace-dotfiles
+# manages. DECK_WAKE_T3_DRY_RUN=1 prints each send's arguments instead of sending.
+
+for cli in deck t3 jq; do
+    if ! command -v "${cli}" >/dev/null; then
+        echo "deck-wake-t3: ${cli} is not installed; nothing to wake" >&2
+        exit 0
+    fi
+done
+
+deck_args=()
+case "${1:-}" in
+    --config) deck_args=(--config "${2:?deck-wake-t3: --config needs a path}") ;;
+    '') ;;
+    *) echo "Usage: deck-wake-t3 [--config PATH] < activity.json" >&2; exit 2 ;;
+esac
+
+config=${deck_args[1]:-${HOME}/.config/deck/config.yml}
+if [ ! -e "${config}" ]; then
+    echo "deck-wake-t3: no deck client configuration at ${config}; nothing to wake" >&2
+    exit 0
+fi
+
+event=$(cat)
+
+sessions=$(printf '%s' "${event}" | deck resolve "${deck_args[@]}" --event - --json)
+
+thread_id=$(printf '%s' "${event}" | jq -r '.thread_id')
+summary=$(printf '%s' "${event}" | jq -r '
+    (.author.username // .author.id // "someone") as $who
+    | if .message then "\($who) posted a message"
+      elif .component then "\($who) used a component (custom_id \(.component.custom_id // "unknown"))"
+      elif .poll_vote then
+          if .poll_vote.removed then "\($who) removed a poll vote" else "\($who) voted in a poll" end
+      else "\($who) acted" end')
+
+notice="[deck relay, automated: not from your operator] New Discord activity in thread ${thread_id}: ${summary}. Run \`deck read ${thread_id}\` to read it and mark it read."
+
+mapfile -t t3_threads < <(printf '%s' "${sessions}" | jq -r '
+    .sessions[].identifiers[] | select(.name == "T3CODE_THREAD_ID") | .value' | sort -u)
+
+failed=0
+for t3_thread in "${t3_threads[@]}"; do
+    [ -n "${t3_thread}" ] || continue
+    if [ -n "${DECK_WAKE_T3_DRY_RUN:-}" ]; then
+        printf 't3 thread send %q -  <<< %q\n' "${t3_thread}" "${notice}"
+        continue
+    fi
+    if ! printf '%s\n' "${notice}" | t3 thread send "${t3_thread}" - >/dev/null; then
+        echo "deck-wake-t3: could not notify T3 thread ${t3_thread}" >&2
+        failed=1
+    fi
+done
+
+exit "${failed}"
