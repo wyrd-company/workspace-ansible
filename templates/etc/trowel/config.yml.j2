@@ -24,7 +24,14 @@ nats:
 #
 # Each relay has a durable consumer per destination, relay-<name>-<destination>.
 # deliver_policy new: on first start, do not replay the stream's 30 days of pushes.
+#
+# A workspace on forks (upstream_org set and not org, see docs/fork-overlay.md) also gets a
+# <name>-upstream subject per relay for pushes to the upstream repository, which enqueue
+# fork-sync (workflows repo, main). It brings the fork's main up to upstream's; the fork's own
+# push subject above then sees that push and applies the result. Each repository gets its own
+# subject, even when two relays share a DAG (skills and workspace-dotfiles).
 subjects:
+{% set upstream_org = upstream_org | default('') %}
 {% for relay in [
   {'name': 'ansible', 'repo': 'workspace-ansible', 'dag': 'workspace-update-ansible'},
   {'name': 'dotfiles', 'repo': 'workspace-dotfiles', 'dag': 'workspace-update-dotfiles'},
@@ -56,6 +63,29 @@ subjects:
             - /workflows/main/sub-dags/{{relay.dag}}.yml
           # An enqueue takes well under a second; below backoff[0], see above
           timeout: 20s
+{% if upstream_org | length > 0 and upstream_org != org %}
+  - name: {{workspace}}-{{relay.name}}-upstream
+    subject: github.{{upstream_org}}.{{relay.repo}}.push.none
+    # UPSTREAM is the pushed repository, FORK is this workspace's copy of it
+    transform:
+      payload: '{"UPSTREAM": payload.repository.full_name, "FORK": "{{org}}/{{relay.repo}}", "REF": payload.ref, "SHA": payload.after}'
+    consumer:
+      deliver_policy: new
+      # As above
+      backoff: [1m, 5m, 15m, 30m]
+    destinations:
+      - name: fork-sync
+        command:
+          argv:
+            - /usr/local/bin/dagu
+            - enqueue
+            - --config
+            - /etc/dagu/config.yml
+            - --params-stdin
+            - /workflows/main/sub-dags/fork-sync.yml
+          # As above
+          timeout: 20s
+{% endif %}
 {% endfor %}
 
   # Discord activity in threads that deck touched (deck service, stream DECK, subjects
