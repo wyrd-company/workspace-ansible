@@ -70,3 +70,6 @@ session touched resolves to no session and wakes nothing, so every workspace can
 consume every event. A failed resolve or send fails the delivery, and Trowel
 retries it. Run `DECK_WAKE_T3_DRY_RUN=1 deck-wake-t3 < activity.json` to see the
 sends without making them.
+
+A workspace on forks adds its own vars, `/etc` templates and tasks under `fork/`, which
+upstream never commits to; see [docs/fork-overlay.md](docs/fork-overlay.md).

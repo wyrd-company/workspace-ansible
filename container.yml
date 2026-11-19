@@ -34,10 +34,29 @@
     - name: Load variables from workspace options
       ansible.builtin.include_vars:
         file: /etc/workspace/config.yml
+
+    # Fork overlay (docs/fork-overlay.md). Upstream never commits under fork/, so a fork's files
+    # there never conflict with a sync. All three paths are optional.
+    - name: Look for the fork overlay
+      ansible.builtin.stat:
+        path: "{{ playbook_dir }}/fork/{{ item }}"
+      loop:
+        - vars.yml
+        - templates/etc
+        - tasks
+      register: fork_overlay
+
+    # After the workspace options, so a fork's vars override them
+    - name: Load the fork's variables
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/fork/vars.yml"
+      when: fork_overlay.results[0].stat.exists
+
     - name: Apply system-wide configurations as root
       become: true
       vars:
         template_root: "{{ playbook_dir }}/templates/etc"
+        fork_template_root: "{{ playbook_dir }}/fork/templates/etc"
       block:
         - name: Find all template files locally
           ansible.builtin.find:
@@ -48,24 +67,47 @@
           become: false
           register: template_files
 
+        - name: Find the fork's template files locally
+          ansible.builtin.find:
+            paths: "{{ fork_template_root }}"
+            recurse: true
+            patterns: "*.j2"
+          delegate_to: localhost
+          become: false
+          when: fork_overlay.results[1].stat.exists
+          register: fork_template_files
+
+        # Source file by path relative to templates/etc. A fork template with the same relative path
+        # replaces the upstream one: the upstream file is never rendered, so the result does not depend
+        # on the order of the renders.
+        - name: Choose the template for each file under /etc
+          ansible.builtin.set_fact:
+            etc_templates: >-
+              {{ dict(template_files.files | map(attribute='path') | map('relpath', template_root)
+                      | zip(template_files.files | map(attribute='path')))
+                 | combine(dict((fork_template_files.files | default([])) | map(attribute='path')
+                      | map('relpath', fork_template_root)
+                      | zip((fork_template_files.files | default([])) | map(attribute='path')))) }}
+
         - name: Ensure target subdirectories exist under /etc
           ansible.builtin.file:
-            path: "/etc/{{ item.path | dirname | relpath(template_root) }}"
+            path: "/etc/{{ item }}"
             state: directory
             owner: root
             group: root
             mode: '0755'
-          loop: "{{ template_files.files }}"
-          when: item.path | dirname != template_root
+          loop: "{{ etc_templates | dict2items | map(attribute='key') | map('dirname') | select | unique | sort }}"
 
         - name: Render and deploy templates to /etc
           ansible.builtin.template:
-            src: "{{ item.path }}"
-            dest: "/etc/{{ item.path | relpath(template_root) | regex_replace('\\.j2$', '') }}"
+            src: "{{ item.value }}"
+            dest: "/etc/{{ item.key | regex_replace('\\.j2$', '') }}"
             owner: root
             group: root
             mode: '0644'
-          loop: "{{ template_files.files }}"
+          loop: "{{ etc_templates | dict2items | sort(attribute='key') }}"
+          loop_control:
+            label: "{{ item.key }}"
           register: rendered_templates
 
         # Trowel rereads its configuration on its own only while it can watch the file, and a
@@ -254,6 +296,18 @@
             toha_templates:
               - project
               - repo
+
+    # The fork's tasks run last, when everything above is in place. They set their own become.
+    - name: Find the fork's tasks
+      ansible.builtin.find:
+        paths: "{{ playbook_dir }}/fork/tasks"
+        patterns: "*.yml"
+      when: fork_overlay.results[2].stat.exists
+      register: fork_task_files
+
+    - name: Run the fork's tasks
+      ansible.builtin.include_tasks: "{{ item }}"
+      loop: "{{ (fork_task_files.files | default([])) | map(attribute='path') | sort }}"
 
   # 3. HANDLERS
   # Handlers only run if a task in step 1 actually changes a file
