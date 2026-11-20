@@ -3,4 +3,6 @@
 # The key is read through Wyrwood on each call; it is not saved in any file.
 set -eu
 export PATH="${PATH:-/usr/bin:/bin}:/home/linuxbrew/.linuxbrew/bin"
+# Clients such as Codex and Grok may not pass the Wyrwood socket address to a helper.
+export BAO_ADDR="${BAO_ADDR:-unix:///run/wyrwood/vault.sock}"
 exec bao kv get -field=api_key 'kv/xolotl/keys/{{ xolotl_key }}'
