@@ -12,16 +12,6 @@ token_ttl_secs = 3600
 [endpoints]
 models_base_url = "{{ xolotl_url }}/v1"
 
-[model."grok-4.7"]
-model = "grok-4.7"
-base_url = "{{ xolotl_url }}/v1"
-name = "Grok 4.7 (Xolotl)"
-api_backend = "responses"
-auth_provider = "xolotl"
-
-[models]
-default = "grok-4.7"
-
 # git-operator is a SessionStart hook: it tells the agent which git operator this T3 thread commits as.
 # Declared here, as for Codex, rather than as a plugin: a system layer cannot install or trust a plugin for
 # each user. It runs the plugin's own script from the checkout and prints its context on stdout.
