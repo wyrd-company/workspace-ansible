@@ -193,9 +193,16 @@
         # Parallel agent builds saturated the CPU. CARGO_HOME (/usr/local/cargo) is a bind mount of the host's shared
         # cargo cache, so this one file caps every workspace on the host and survives rebuilds; ~/.cargo/config.toml
         # would apply only to builds under the home folder. Cargo never writes this file, so the playbook owns it.
+        # Workspaces without the rust feature have no cargo home, so the cap is skipped there.
+        - name: Look for the cargo home
+          ansible.builtin.stat:
+            path: "{{ lookup('env', 'CARGO_HOME') | default('/usr/local/cargo', true) }}"
+          register: cargo_home
+
         - name: Cap parallel cargo build jobs
+          when: cargo_home.stat.isdir | default(false)
           ansible.builtin.copy:
-            dest: "{{ lookup('env', 'CARGO_HOME') | default('/usr/local/cargo', true) }}/config.toml"
+            dest: "{{ cargo_home.stat.path }}/config.toml"
             mode: '0644'
             content: |
               # Managed by workspace-ansible (container.yml); edits here are overwritten.

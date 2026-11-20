@@ -20,6 +20,7 @@ The playbook owns `$CARGO_HOME/config.toml` and caps cargo at 4 parallel compile
 jobs, since agents build at once. `CARGO_HOME` (`/usr/local/cargo`) is a bind mount
 of the host's shared cargo cache, so the cap reaches every workspace on the host.
 Override it for one build with `-j N` or `CARGO_BUILD_JOBS=N`.
+Workspaces without Rust have no cargo home, and the playbook skips the cap there.
 
 The installed Toha `project` template asks for an optional remote URL. Toha
 initializes the project as a Git repository even when the URL is empty, so it can
