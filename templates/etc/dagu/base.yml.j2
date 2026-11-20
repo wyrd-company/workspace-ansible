@@ -114,6 +114,12 @@ env:
 {% for name, value in automation_git_env.items() %}
   - {{ name }}: "{{ value }}"
 {% endfor %}
+  # Dagu passes steps only a few variables from its own environment, and
+  # VAULT_ADDR is not one of them. Without it `gh vault-agent-app-token` falls
+  # back to a Vault Agent at 127.0.0.1:8100, which does not exist, and every
+  # bare `gh` call fails before it reaches GitHub. The Wyrwood socket adds the
+  # token, as for the vault secrets below.
+  - VAULT_ADDR: "unix:///run/wyrwood/vault.sock"
   # Names the identity for the git shim (~/.local/bin/git, from workspace-dotfiles), which then
   # runs git as `git automation`. It is not in automation_git_env, because git-automation
   # exports that map and then runs git, which is the shim again: the shim would call it forever.
