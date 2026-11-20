@@ -30,6 +30,12 @@ git-operator SessionStart hook and the mnemonic MCP server. Its Xolotl MCP conne
 uses `headers_helper` (Grok Build 1.0.88 and later), with the same helper as Codex and Claude Code.
 Both helpers default `BAO_ADDR` to the Wyrwood socket, since clients may not pass it.
 
+For clients whose remote MCP configuration supports only static HTTP URLs (such as Antigravity),
+the playbook also configures a loopback-only Caddy proxy at `http://127.0.0.1:18317/mcp`
+(`/etc/caddy/system.d/xolotl-mcp.caddy`) backed by `caddy-header-auth`
+(`/etc/caddy-header-auth/conf.d/xolotl-mcp.json`), which invokes `/usr/local/bin/xolotl-mcp-headers`
+per request and copies the `Authorization` header upstream to `{{ xolotl_url }}/mcp`.
+
 The installed Toha `project` template asks for an optional remote URL. Toha
 initializes the project as a Git repository even when the URL is empty, so it can
 save `.toha.json` for template tracking and updates. A target already inside a

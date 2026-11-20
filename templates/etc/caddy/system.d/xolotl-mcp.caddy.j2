@@ -1,0 +1,20 @@
+# Managed by workspace-ansible. Local loopback proxy for Xolotl's MCP gateway,
+# for clients without a dynamic headersHelper (such as Antigravity).
+http://127.0.0.1:18317 {
+	bind 127.0.0.1
+
+	handle /mcp {
+		forward_auth unix//run/caddy-header-auth/auth.sock {
+			uri /xolotl-mcp
+			copy_headers Authorization
+		}
+
+		reverse_proxy {{ xolotl_url }} {
+			flush_interval -1
+		}
+	}
+
+	handle {
+		respond 404
+	}
+}

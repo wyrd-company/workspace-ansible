@@ -123,6 +123,18 @@
             rendered_templates.results | selectattr('changed')
             | map(attribute='dest') | select('match', '/etc/trowel/') | list | length > 0
 
+        # Caddy watches /etc/caddy/system.d, but reloading explicitly covers containers
+        # that hit inotify limits and skips older images without the system.d import.
+        - name: Reload caddy when its configuration changed
+          ansible.builtin.shell:
+            cmd: |
+              if [ -S /run/caddy/admin.sock ] && grep -q '/etc/caddy/system\.d/' /etc/caddy/Caddyfile 2>/dev/null; then
+                /usr/local/bin/caddy-reload
+              fi
+          when: >-
+            rendered_templates.results | selectattr('changed')
+            | map(attribute='dest') | select('match', '/etc/caddy/') | list | length > 0
+
         # On PATH, so `git automation <cmd>` works; the hooks of the toha templates use it
         - name: Install git-automation
           ansible.builtin.template:
