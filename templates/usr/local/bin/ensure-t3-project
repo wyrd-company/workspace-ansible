@@ -2,6 +2,7 @@
 set -euo pipefail
 
 # Usage: ensure-t3-project [--workspace] [--icon-from <dir>] <path> <title>
+#        ensure-t3-project --all [--dry-run] [<workspace>]
 #
 # Register <path> as a T3 Code project named <title>, unless a project already
 # has that workspace root: an existing project keeps its title. The toha
@@ -16,6 +17,21 @@ set -euo pipefail
 # project's icon. The repo template passes the default branch worktree, so a
 # repo folder shows the icon its repository ships. An `iconPath` that still
 # exists is left alone, as are the file's other keys.
+#
+# --all registers every project folder and repo folder in <workspace>
+# (default /workspace), for folders made before the templates did. It expects
+# the layout the toha templates make, <workspace>/<project>/<repo>, and reads
+# each project's .toha.json instead of guessing from folder names:
+#   - a project folder is a folder of <workspace> whose .toha.json records the
+#     `project` template applied to it;
+#   - a repo folder is one that record lists as a `repo` application, and holds
+#     its bare clone <repo>.git and its default branch worktree, main, or fork
+#     for a fork;
+#   - a project folder may also hold the template's own folders: archive,
+#     references, memory, tasks and .skills.
+# Any other folder, or a recorded repo folder that is missing or incomplete,
+# is reported and left unregistered, and --all then exits 1. Hidden folders
+# that no record names are ignored. --dry-run reports without registering.
 #
 # Does nothing, successfully, where it should not register anything: without
 # the t3 CLI, and in the temporary checkout toha's --update and --baseline
@@ -36,8 +52,12 @@ ICON_CANDIDATES=(
     docs/assets/favicon.svg docs/user/assets/favicon.ico docs/assets/favicon.ico
 )
 
+# Folders the project template makes or checks out in a project folder
+PROJECT_PARTS=(archive references memory tasks .skills)
+
 usage() {
     echo "Usage: ensure-t3-project [--workspace] [--icon-from <dir>] <path> <title>" >&2
+    echo "       ensure-t3-project --all [--dry-run] [<workspace>]" >&2
     exit 2
 }
 
@@ -80,7 +100,104 @@ record_icon() {
     echo "Set the T3 project icon to $icon"
 }
 
+# Reports a folder that does not fit the expected layout
+problem() {
+    echo "Not as expected: $*" >&2
+    problems=$((problems + 1))
+}
+
+# Registers <path> as <title> through this script, or says it would
+register() {
+    if $dry_run; then
+        local title=${*: -1}
+        [[ "$1" != --workspace ]] || title="${WORKSPACE_NAME:-\$WORKSPACE_NAME} $title"
+        echo "Would register ${*: -2:1} as $title, unless it is already a T3 project"
+    elif ! "$self" "$@"; then
+        problem "${*: -2:1} could not be registered"
+    fi
+}
+
+# Registers the project folder <dir> and its repo folders
+ensure_project_folder() {
+    local dir=$1 name record repos repo sub part known
+    name=$(basename -- "$dir")
+    record=$dir/.toha.json
+    if [[ ! -f "$record" ]] ||
+        ! jq -e '[.applications[]? | select((.template | split("/") | last) == "project" and .target == ".")] | length > 0' \
+            "$record" >/dev/null 2>&1; then
+        problem "$dir is not a project folder: no .toha.json records the project template applied to it"
+        return
+    fi
+    register --workspace "$dir" "$name"
+
+    repos=$(jq -r '.applications[] | select((.template | split("/") | last) == "repo")
+        | "\(.target)\t\(if .answers.fork then "fork" else "main" end)"' "$record")
+    local -A recorded=()
+    while IFS=$'\t' read -r repo branch; do
+        [[ -n "$repo" ]] || continue
+        recorded[$repo]=1
+        if [[ "$repo" == */* || "$repo" == . || "$repo" == .. ]]; then
+            problem "$record records the repo folder $repo, which is not a folder of $dir"
+        elif [[ ! -d "$dir/$repo" ]]; then
+            problem "$dir/$repo is recorded in $record but missing"
+        elif [[ ! -d "$dir/$repo/$repo.git" ]]; then
+            problem "$dir/$repo has no bare clone $repo.git"
+        elif [[ ! -e "$dir/$repo/$branch/.git" ]]; then
+            problem "$dir/$repo has no $branch worktree"
+        else
+            register --icon-from "$dir/$repo/$branch" "$dir/$repo" "$repo"
+        fi
+    done <<<"$repos"
+
+    for sub in "$dir"/*/ "$dir"/.*/; do
+        [[ -d "$sub" ]] || continue
+        sub=$(basename -- "$sub")
+        [[ "$sub" == . || "$sub" == .. || -n "${recorded[$sub]:-}" ]] && continue
+        known=false
+        for part in "${PROJECT_PARTS[@]}"; do
+            [[ "$sub" == "$part" ]] && known=true
+        done
+        $known && continue
+        [[ "$sub" == .* ]] && continue
+        problem "$dir/$sub is neither a repo folder recorded in $record nor one of the project template's folders"
+    done
+}
+
+# Registers every project folder and repo folder in <workspace>
+ensure_all() {
+    local root=/workspace dir
+    dry_run=false
+    problems=0
+    self=$(realpath -- "${BASH_SOURCE[0]}")
+    while [[ "${1:-}" == --* ]]; do
+        case $1 in
+            --dry-run) dry_run=true; shift ;;
+            *) usage ;;
+        esac
+    done
+    [[ $# -le 1 ]] || usage
+    [[ $# -eq 0 ]] || root=$1
+    if [[ ! -d "$root" ]]; then
+        echo "Error: $root is not a folder" >&2
+        return 1
+    fi
+    root=$(realpath -- "$root")
+    for dir in "$root"/*/; do
+        [[ -d "$dir" ]] || continue
+        ensure_project_folder "${dir%/}"
+    done
+    if ((problems > 0)); then
+        echo "$problems folder(s) in $root do not fit <workspace>/<project>/<repo>; fix them and run again" >&2
+        return 1
+    fi
+}
+
 main() {
+    if [[ "${1:-}" == --all ]]; then
+        shift
+        ensure_all "$@"
+        return
+    fi
     local icon_from="" workspace=false
     while [[ "${1:-}" == --* ]]; do
         case $1 in
