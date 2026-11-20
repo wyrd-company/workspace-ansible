@@ -8,7 +8,9 @@ the workspace's key from `kv/xolotl/keys/<xolotl_key>` through Wyrwood with
 configuration. The key's Xolotl policy must grant the `mcp` scope and allow the
 upstream servers in `mcp_servers`.
 
-Codex uses `http_headers_helper`. Claude Code's user-owned connection in
+Codex uses `http_headers_helper` and sets the Wyrwood socket address explicitly
+because Codex does not pass `BAO_ADDR` or `VAULT_ADDR` to the helper.
+Claude Code's user-owned connection in
 `~/.claude.json` is managed by workspace-dotfiles, which reads `xolotl_url` from
 `/etc/workspace/config.yml` and uses the same helper as `headersHelper`. Claude's
 `managedMcpServers` setting rejects header helpers, and `managed-mcp.json`
