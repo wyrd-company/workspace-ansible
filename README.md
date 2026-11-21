@@ -86,5 +86,40 @@ consume every event. A failed resolve or send fails the delivery, and Trowel
 retries it. Run `DECK_WAKE_T3_DRY_RUN=1 deck-wake-t3 < activity.json` to see the
 sends without making them.
 
+The `t3c-approvals` service reviews T3 Code approvals with an agent, following
+[Send approvals to a reviewer thread](https://wyrd.foo/docs/t3c/watch-approvals.md).
+It watches approvals only: questions (user-input requests) stay for a person.
+At each start it mints a five-minute pairing token with `t3 auth pairing create`
+(the scriptable form of `t3 pair`) and pairs `t3c` with the local server, in a
+t3c configuration of its own under `~/.local/state/t3c-approvals/t3c`, so the
+user's t3c profiles are untouched. It then runs `t3c requests watch --kind approval`
+over the whole server. For each pending approval it starts a reviewer thread in its
+own project, by default `~/.local/share/t3c-approvals/reviews`, and acts on the last
+line of the reply: `APPROVE` accepts, `REJECT` rejects, and anything else, a
+timeout or an error leaves the approval for a person. Approvals from reviewer
+threads are never reviewed. The service needs t3c 0.2.4 or later, for
+`requests watch`; with an older one it logs the problem and retries every five
+minutes.
+
+`/etc/t3c-approvals/config.toml` sets the prompt, provider, model, effort,
+reviewer folder, server, watched projects, concurrency and review timeout. The
+playbook renders it from the `t3c_approvals_*` variables, which a fork sets in its
+`vars.yml`. The service reads the file at start, and the playbook restarts it
+when the file, the script or the run file changes. To try a change by hand, edit
+the file and restart the service with `sudo /command/s6-svc -r /run/service/t3c-approvals`.
+`T3C_APPROVALS_DRY_RUN=1 t3c-approvals hook < request.json`, run with
+`T3C_APPROVALS_REVIEW_PROJECT` set, reviews one request record without
+responding to it.
+
+The service is a legacy s6-overlay longrun, `/etc/services.d/t3c-approvals`. An
+s6-rc service would not start until the next container start: s6-overlay compiles
+`/etc/s6-overlay/s6-rc.d` before the `ansible-setup` oneshot runs the playbook. Its
+`legacy-services` oneshot runs after the `user` bundle, which holds `ansible-setup`,
+and supervises `/etc/services.d`, so the service starts on the same boot. On a later
+`ansible-sync`, `/usr/local/bin/s6-legacy-service` does the same for a service
+that is not supervised yet. `tests/s6-legacy-service.sh` proves both in the base image
+with Docker; `tests/t3c-approvals.sh` checks the configuration and the hook's
+decisions against a fake t3c.
+
 A workspace on forks adds its own vars, `/etc` templates and tasks under `fork/`, which
 upstream never commits to; see [docs/fork-overlay.md](docs/fork-overlay.md).

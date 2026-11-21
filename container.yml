@@ -195,6 +195,60 @@
             group: root
             mode: '0755'
 
+        # The t3c-approvals service reviews T3 Code approvals, not questions, with an agent. Its
+        # configuration is /etc/t3c-approvals/config.toml, rendered above.
+        - name: Install t3c-approvals
+          ansible.builtin.copy:
+            src: templates/usr/local/bin/t3c-approvals
+            dest: /usr/local/bin/t3c-approvals
+            owner: root
+            group: root
+            mode: '0755'
+          register: t3c_approvals_bin
+
+        # A legacy s6-overlay longrun, not an s6-rc one: s6-overlay compiles /etc/s6-overlay/s6-rc.d
+        # before this playbook runs at startup, but its legacy-services oneshot copies
+        # /etc/services.d into /run/service after ansible-setup, so the service starts on the same boot.
+        - name: Create the t3c-approvals service directory
+          ansible.builtin.file:
+            path: /etc/services.d/t3c-approvals
+            state: directory
+            owner: root
+            group: root
+            mode: '0755'
+
+        - name: Install the t3c-approvals service
+          ansible.builtin.copy:
+            src: templates/etc/services.d/t3c-approvals/run
+            dest: /etc/services.d/t3c-approvals/run
+            owner: root
+            group: root
+            mode: '0755'
+          register: t3c_approvals_run
+
+        # Supervises a legacy longrun now, when its boot's legacy-services oneshot has already run
+        - name: Install s6-legacy-service
+          ansible.builtin.copy:
+            src: templates/usr/local/bin/s6-legacy-service
+            dest: /usr/local/bin/s6-legacy-service
+            owner: root
+            group: root
+            mode: '0755'
+
+        # At startup this leaves the service to legacy-services; on a later ansible-sync it adds the
+        # service, or restarts it when its script, run file or configuration changed.
+        - name: Supervise t3c-approvals
+          ansible.builtin.command:
+            argv:
+              - /usr/local/bin/s6-legacy-service
+              - t3c-approvals
+              - >-
+                {{ 'restart' if (t3c_approvals_bin.changed or t3c_approvals_run.changed
+                   or rendered_templates.results | selectattr('changed') | map(attribute='dest')
+                      | select('match', '/etc/t3c-approvals/') | list | length > 0) else '' }}
+          register: t3c_approvals_supervise
+          changed_when: t3c_approvals_supervise.stdout | length > 0
+
         # The homelab CA is bind-mounted read-only into /usr/local/share/ca-certificates at run time, so the image's
         # trust store does not have it. Every start and every ansible-sync rebuilds the store from that directory.
         - name: Refresh the CA trust store
