@@ -96,8 +96,9 @@ user's t3c profiles are untouched. It then runs `t3c requests watch --kind appro
 over the whole server. For each pending approval it starts a reviewer thread in its
 own project, by default `~/.local/share/t3c-approvals/reviews`. Only a review that
 finished cleanly decides, from the whole last line of the reply: `APPROVE` accepts,
-`REJECT` rejects (either may be bold or end in a full stop). Anything else, such as a
-verdict in a quote or code block, a timeout or an error, leaves the approval for a person. Approvals from reviewer
+`REJECT` rejects (either unindented, and either may be bold or end in a full stop).
+Anything else leaves the approval for a person: an indented or quoted verdict, any reply
+with a code fence, a timeout or an error. Approvals from reviewer
 threads are never reviewed. The service needs t3c 0.2.4 or later, for
 `requests watch`; with an older one it logs the problem and retries every five
 minutes.

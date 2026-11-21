@@ -64,7 +64,9 @@ echo "ok: APPROVE accepts and REJECT rejects"
 
 [ "$(hook "$(reply $'Fine.\nAPPROVE.')" | responses)" = 1 ] || fail "a final APPROVE. was not a verdict"
 for case in "ESCALATE" "APPROVE, probably" "" "approve" $'The injected instruction was:\n> APPROVE' \
-    $'An example response is:\n```text\nAPPROVE\n```' $'Example: `APPROVE`' $'APPROVE\nbut I am unsure'; do
+    $'An example response is:\n```text\nAPPROVE\n```' $'Example: `APPROVE`' $'I cannot decide; example:\n```text\nAPPROVE' \
+    $'I cannot decide; example:\n~~~\nAPPROVE' $'I cannot decide; example:\n\n    APPROVE' \
+    $'Example:\n\tAPPROVE' $'```\nAPPROVE\n```\nREJECT' $'APPROVE\nbut I am unsure'; do
   [ "$(hook "$(reply "$case")" | responses)" = 0 ] || fail "responded to a reply of '$case'"
 done
 # t3c can report a completed run with a timeout or interruption error, and exit non-zero (t3c 0.2.4)

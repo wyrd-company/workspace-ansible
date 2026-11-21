@@ -192,13 +192,19 @@ def serve(config_path):
     ])
 
 
-# The whole last line, optionally in bold and with a full stop. A verdict in a quote or a code
-# block is an example, not a decision: such a last line is not a verdict.
+# The whole last line, unindented, optionally in bold and with a full stop. A verdict in a
+# quote or a code block is an example, not a decision. Rather than track Markdown's block
+# rules, a reply with any code fence has no verdict, and an indented last line (an indented
+# code block or a continuation) is not one.
 VERDICT_LINE = re.compile(r"(APPROVE|REJECT|ESCALATE)\.?|\*\*(APPROVE|REJECT|ESCALATE)\.?\*\*")
+FENCE = re.compile(r"^\s*(```|~~~)", re.MULTILINE)
 
 
 def verdict(reply):
-    lines = [line.strip() for line in (reply or "").splitlines() if line.strip()]
+    reply = reply or ""
+    if FENCE.search(reply):
+        return ""
+    lines = [line.rstrip() for line in reply.splitlines() if line.strip()]
     match = VERDICT_LINE.fullmatch(lines[-1]) if lines else None
     return (match.group(1) or match.group(2)) if match else ""
 
