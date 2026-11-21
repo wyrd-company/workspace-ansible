@@ -5,8 +5,9 @@
 #
 # The t3c-approvals service (/usr/local/bin/t3c-approvals) watches the local T3 Code server for
 # pending approvals, not questions, and starts a reviewer thread for each one with the prompt
-# below. The whole last line of a review that finished cleanly decides: APPROVE accepts the approval, REJECT rejects it, and
-# anything else (ESCALATE, a timeout, an error) leaves it pending for a person.
+# below. The whole last line of a review that finished cleanly decides: APPROVE accepts the
+# approval, REJECT rejects it, and anything else (ESCALATE, a timeout, an error) leaves it
+# pending for a person.
 
 # Provider instance and model slug from `t3c server info`. Effort is the model's `effort`
 # option; empty leaves the model's default.
