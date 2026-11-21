@@ -36,7 +36,7 @@ printf '%s\n' "$*" >> "$CALLS"
 case "$*" in
   "--json run "*) cat > "$CALLS.prompt"; printf '%s\n' "$REPLY_JSON"; exit "${REPLY_RC:-0}" ;;
   "--json thread respond "*) echo '{"exitCode":0}' ;;
-  "thread tag "*) ;;
+  "thread tag "*) exit "${TAG_RC:-0}" ;;
   *) exit 9 ;;
 esac
 SH
@@ -44,9 +44,11 @@ chmod +x "$tmp/bin/t3c"
 record='{"type":"request","kind":"approval","requestId":"sample-request","request":{"status":"pending","kind":"command"},
   "thread":{"id":"sample-thread","title":"Sample"},"project":{"id":"sample-work"},"item":{"prompt":"echo sample"}}'
 
+mkdir -p "$tmp/state/t3c-approvals"
+printf 'sample-old-reviews\nsample-reviews\n' > "$tmp/state/t3c-approvals/reviewer-projects"
 hook() { # reply JSON, record → the calls the hook made
   : > "$tmp/calls"
-  printf '%s' "${2:-$record}" | PATH="$tmp/bin:$PATH" CALLS="$tmp/calls" REPLY_JSON="$1" \
+  printf '%s' "${2:-$record}" | PATH="$tmp/bin:$PATH" CALLS="$tmp/calls" REPLY_JSON="$1" XDG_STATE_HOME="$tmp/state" \
     T3C_APPROVALS_REVIEW_PROJECT=sample-reviews "$script" --config "$tmp/default.toml" hook 2>>"$tmp/log"
   cat "$tmp/calls"
 }
@@ -95,7 +97,54 @@ done
 # A former reviewer project (review_dir changed): only the tag identifies its threads
 [ -z "$(hook "$(reply APPROVE)" "$(jq -c '.project.id = "sample-old-reviews" | .thread.tags = ["sample", "t3c-approvals-reviewer"]' <<<"$record")")" ] \
   || fail "reviewed a tagged thread from a former reviewer project"
+# A former reviewer project whose reviewer never got its tag (the tag call failed, or the hook
+# was killed first): the reviewer-projects list still excludes it
+calls=$(TAG_RC=1 REPLY_RC=7 hook '{"threadId":"sample-old-reviewer","state":"pending_request","exitCode":7}')
+grep -q -- '--json run' <<<"$calls" || fail "no review ran: $calls"
+[ -z "$(hook "$(reply APPROVE)" "$(jq -c '.project.id = "sample-old-reviews" | .thread.id = "sample-old-reviewer"' <<<"$record")")" ] \
+  || fail "reviewed an untagged thread from a former reviewer project"
+# Without the list, nothing is reviewed
+mv "$tmp/state/t3c-approvals/reviewer-projects" "$tmp/reviewer-projects"
+[ "$(hook "$(reply APPROVE)" | grep -c '^--json' || true)" = 0 ] || fail "reviewed without the reviewer-projects list"
+mv "$tmp/reviewer-projects" "$tmp/state/t3c-approvals/reviewer-projects"
 echo "ok: reviewer threads, resolved requests and questions are not reviewed"
+
+# serve, against fake t3 and t3c: pairing, the reviewer-projects list, and the watch's arguments
+mkdir "$tmp/serve-bin"
+cat > "$tmp/serve-bin/t3" <<'SH'
+#!/bin/sh
+printf 't3 %s\n' "$*" >> "$CALLS"
+echo '{"credential":"sample-token"}'
+SH
+cat > "$tmp/serve-bin/t3c" <<'SH'
+#!/bin/sh
+printf 't3c %s\n' "$*" >> "$CALLS"
+case "$*" in
+  "--version") echo "t3c 0.2.4" ;;
+  "auth pair "*) cat > "$CALLS.token" ;;
+  "auth switch "*) ;;
+  "--json project ensure "*) printf '{"data":{"id":"%s"}}\n' "$PROJECT" ;;
+  "requests watch "*) printf 'config=%s\n' "$T3C_CONFIG_HOME" >> "$CALLS" ;;
+  *) exit 9 ;;
+esac
+SH
+chmod +x "$tmp/serve-bin/t3" "$tmp/serve-bin/t3c"
+serve() { # reviewer project id
+  : > "$tmp/serve-calls"
+  PATH="$tmp/serve-bin:$PATH" CALLS="$tmp/serve-calls" PROJECT="$1" XDG_STATE_HOME="$tmp/serve-state" \
+    "$script" --config "$tmp/default.toml" serve 2>>"$tmp/log"
+}
+serve sample-first; serve sample-second; serve sample-first
+calls=$(cat "$tmp/serve-calls")
+grep -q -- '^t3 auth pairing create .*--scope orchestration:read --scope orchestration:operate .*--json' <<<"$calls" || fail "pairing: $calls"
+grep -q -- '^t3c auth pair --server http://127.0.0.1:3773 --name t3c-approvals --pairing-token-stdin' <<<"$calls" || fail "pair: $calls"
+[ "$(cat "$tmp/serve-calls.token")" = sample-token ] || fail "the pairing token was not passed on stdin"
+grep -qx "config=$tmp/serve-state/t3c-approvals/t3c" <<<"$calls" || fail "t3c does not use its own configuration: $calls"
+grep -q -- '^t3c requests watch --ignore-defaults --kind approval --exclude-tag t3c-approvals-reviewer --exec ' <<<"$calls" \
+  || fail "watch: $calls"
+[ "$(cat "$tmp/serve-state/t3c-approvals/reviewer-projects")" = $'sample-first\nsample-second' ] \
+  || fail "reviewer-projects: $(cat "$tmp/serve-state/t3c-approvals/reviewer-projects")"
+echo "ok: serve pairs, records every reviewer project once and watches approvals only"
 
 printf 'provider = ""\n' > "$tmp/bad.toml"
 ! "$script" --config "$tmp/bad.toml" hook </dev/null 2>/dev/null || fail "accepted an empty provider"

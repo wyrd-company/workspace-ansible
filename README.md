@@ -98,9 +98,11 @@ own project, by default `~/.local/share/t3c-approvals/reviews`. Only a review th
 finished cleanly decides, from the whole first line of the reply: `APPROVE` accepts,
 `REJECT` rejects (either unindented, and either may be bold or end in a full stop).
 Anything else, a timeout or an error leaves the approval for a person. The first line
-is used because no earlier quote or code block can contain it. Every reviewer thread is
-tagged `t3c-approvals-reviewer`, and approvals from reviewer threads are never reviewed,
-also after `review_dir` changes. The service needs t3c 0.2.4 or later, for
+is used because no earlier quote or code block can contain it. Approvals from reviewer
+threads are never reviewed, also after `review_dir` changes. The service records every
+reviewer project it has used in `~/.local/state/t3c-approvals/reviewer-projects` before
+any review starts, and tags each reviewer thread `t3c-approvals-reviewer`. When that list
+cannot be read, nothing is reviewed. The service needs t3c 0.2.4 or later, for
 `requests watch`; with an older one it logs the problem and retries every five
 minutes.
 

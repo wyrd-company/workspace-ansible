@@ -59,6 +59,24 @@ def state_dir():
     return Path(base) / "t3c-approvals"
 
 
+def reviewer_projects_file():
+    """Every reviewer project the service has used, one id per line. It outlives a review_dir
+    change, and is written before any reviewer thread exists, so it does not depend on the
+    tag landing or on a hook running to the end."""
+    return state_dir() / "reviewer-projects"
+
+
+def remember_reviewer_project(project):
+    path = reviewer_projects_file()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    known = path.read_text().split() if path.exists() else []
+    if project not in known:
+        with open(path, "a") as file:
+            file.write(project + "\n")
+            file.flush()
+            os.fsync(file.fileno())
+
+
 def load_config(path):
     try:
         with open(path, "rb") as file:
@@ -176,6 +194,7 @@ def serve(config_path):
     review_dir = Path(config["review_dir"])
     review_dir.mkdir(parents=True, exist_ok=True)
     project = t3c("project", "ensure", str(review_dir))["data"]["id"]
+    remember_reviewer_project(project)
     log(f"reviewer project {project} ({review_dir})")
 
     review_timeout = duration_seconds(config["timeout"])
@@ -231,8 +250,13 @@ def hook(config_path):
 
     if record.get("type") != "request" or record.get("kind") != "approval":
         return
-    # The tag lands when the review ends; until then the reviewer is in the current project
-    if (record.get("project") or {}).get("id") == project or REVIEWER_TAG in (thread.get("tags") or []):
+    try:
+        reviewer_projects = {project, *reviewer_projects_file().read_text().split()}
+    except OSError as error:
+        # Fail closed: without the list, a former reviewer's approval could be reviewed
+        fail(f"cannot read {reviewer_projects_file()}: {error}; leaving {label} for a person")
+    # Current and former reviewer projects hold only reviewer threads; the tag marks them too
+    if (record.get("project") or {}).get("id") in reviewer_projects or REVIEWER_TAG in (thread.get("tags") or []):
         log(f"skipping {label}: it is from a reviewer thread")
         return
     if (record.get("request") or {}).get("status") != "pending":
