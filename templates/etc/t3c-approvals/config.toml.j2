@@ -5,9 +5,9 @@
 #
 # The t3c-approvals service (/usr/local/bin/t3c-approvals) watches the local T3 Code server for
 # pending approvals, not questions, and starts a reviewer thread for each one with the prompt
-# below. The whole last line of a review that finished cleanly decides: APPROVE accepts the
+# below. The whole first line of a review that finished cleanly decides: APPROVE accepts the
 # approval, REJECT rejects it, and anything else (ESCALATE, a timeout, an error) leaves it
-# pending for a person.
+# pending for a person. A custom prompt must ask for the verdict on the first line.
 
 # Provider instance and model slug from `t3c server info`. Effort is the model's `effort`
 # option; empty leaves the model's default.
@@ -15,8 +15,8 @@ provider = {{ t3c_approvals_provider | default('claudeAgent') | to_json }}
 model = {{ t3c_approvals_model | default('claude-sonnet-5-5') | to_json }}
 effort = {{ t3c_approvals_effort | default('medium') | to_json }}
 
-# The reviewer threads' project. The service creates the folder and the T3 Code project, and
-# never reviews approvals from threads in it.
+# The reviewer threads' project. The service creates the folder and the T3 Code project. It
+# tags every reviewer thread t3c-approvals-reviewer and never reviews their approvals.
 review_dir = {{ t3c_approvals_review_dir | default('/home/vscode/.local/share/t3c-approvals/reviews') | to_json }}
 
 # The local T3 Code server, which the service pairs with at every start.
@@ -48,7 +48,8 @@ disabling security controls, or contacting services the work has no reason to re
 Reply ESCALATE when you are unsure, when the action is irreversible or outward-facing (publishing,
 releasing, deploying, sending messages, spending money), or when the record does not say enough.
 
-Give one sentence of reasoning, then end with a line holding only APPROVE, REJECT or ESCALATE.
+Start your reply with a line holding only APPROVE, REJECT or ESCALATE, then give one sentence
+of reasoning.
 {% endset %}
 # A multi-line literal string: it cannot contain three single quotes in a row.
 prompt = '''

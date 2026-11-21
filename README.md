@@ -95,11 +95,12 @@ t3c configuration of its own under `~/.local/state/t3c-approvals/t3c`, so the
 user's t3c profiles are untouched. It then runs `t3c requests watch --kind approval`
 over the whole server. For each pending approval it starts a reviewer thread in its
 own project, by default `~/.local/share/t3c-approvals/reviews`. Only a review that
-finished cleanly decides, from the whole last line of the reply: `APPROVE` accepts,
+finished cleanly decides, from the whole first line of the reply: `APPROVE` accepts,
 `REJECT` rejects (either unindented, and either may be bold or end in a full stop).
-Anything else leaves the approval for a person: an indented or quoted verdict, any reply
-with a code fence, a timeout or an error. Approvals from reviewer
-threads are never reviewed. The service needs t3c 0.2.4 or later, for
+Anything else, a timeout or an error leaves the approval for a person. The first line
+is used because no earlier quote or code block can contain it. Every reviewer thread is
+tagged `t3c-approvals-reviewer`, and approvals from reviewer threads are never reviewed,
+also after `review_dir` changes. The service needs t3c 0.2.4 or later, for
 `requests watch`; with an older one it logs the problem and retries every five
 minutes.
 
