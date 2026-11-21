@@ -1,0 +1,28 @@
+#!/bin/sh
+# Usage: s6-legacy-service <name> [restart]
+#
+# Bring /etc/services.d/<name>, a legacy s6-overlay longrun the playbook installed, under
+# supervision now. s6-overlay compiles /etc/s6-overlay/s6-rc.d at boot, before the ansible-setup
+# oneshot runs the playbook, so the playbook cannot add an s6-rc service for the same boot. Its
+# legacy-services oneshot runs after the user bundle, which holds ansible-setup, and copies
+# /etc/services.d into /run/s6/legacy-services, links each service into /run/service and rescans.
+#
+# Before that oneshot has run (at startup) this does nothing: it starts the service itself.
+# Afterwards (a later ansible-sync) it does the same for a service that is not supervised yet,
+# and with `restart` copies the run file again and restarts a supervised one. Prints what it did.
+set -eu
+name=${1:?usage: s6-legacy-service <name> [restart]}
+source=/etc/services.d/${name}
+live=/run/s6/legacy-services
+[ -d "${source}" ] || { echo "s6-legacy-service: no ${source}" >&2; exit 1; }
+[ -d "${live}" ] || exit 0
+if [ ! -e "/run/service/${name}" ]; then
+    /command/s6-hiercopy "${source}" "${live}/${name}"
+    /command/s6-ln -nsf "${live}/${name}" "/run/service/${name}"
+    /command/s6-svscanctl -a /run/service
+    echo added
+elif [ "${2:-}" = restart ]; then
+    cp "${source}/run" "${live}/${name}/run"
+    /command/s6-svc -r "/run/service/${name}"
+    echo restarted
+fi
