@@ -26,6 +26,7 @@ T3C_APPROVALS_DRY_RUN=1 makes `hook` log the decision without responding.
 
 import json
 import os
+import re
 import shlex
 import subprocess
 import sys
@@ -84,7 +85,9 @@ def t3c(*args, stdin=None, check=True):
         data = json.loads(result.stdout) if result.stdout.strip() else {}
     except json.JSONDecodeError:
         data = {}
-    if check and result.returncode != 0:
+    if not check:
+        data["processExitCode"] = result.returncode
+    elif result.returncode != 0:
         detail = (data.get("error") or {}).get("message") or result.stderr.strip() or "no output"
         raise RuntimeError(f"t3c {args[0]} {args[1] if len(args) > 1 else ''} failed "
                            f"({result.returncode}): {detail}")
@@ -189,12 +192,22 @@ def serve(config_path):
     ])
 
 
+# The whole last line, optionally in bold and with a full stop. A verdict in a quote or a code
+# block is an example, not a decision: such a last line is not a verdict.
+VERDICT_LINE = re.compile(r"(APPROVE|REJECT|ESCALATE)\.?|\*\*(APPROVE|REJECT|ESCALATE)\.?\*\*")
+
+
 def verdict(reply):
-    for line in reversed((reply or "").splitlines()):
-        word = line.strip().strip("*_`.:!#> ").upper()
-        if word:
-            return word
-    return ""
+    lines = [line.strip() for line in (reply or "").splitlines() if line.strip()]
+    match = VERDICT_LINE.fullmatch(lines[-1]) if lines else None
+    return (match.group(1) or match.group(2)) if match else ""
+
+
+def review_succeeded(reply):
+    """Only a review that finished cleanly may decide: t3c can report a completed run together
+    with a timeout or interruption error, and exits non-zero then."""
+    return (reply.get("processExitCode") == 0 and reply.get("exitCode") == 0
+            and not reply.get("error") and reply.get("state") == "completed")
 
 
 def hook(config_path):
@@ -229,7 +242,7 @@ def hook(config_path):
         reply = t3c(*args, stdin=prompt, check=False)
     except OSError as error:
         fail(f"could not start t3c: {error}")
-    decision = verdict(reply.get("assistantMessage")) if reply.get("state") == "completed" else ""
+    decision = verdict(reply.get("assistantMessage")) if review_succeeded(reply) else ""
     reviewer = reply.get("threadId")
     flag = VERDICTS.get(decision)
     if not flag:

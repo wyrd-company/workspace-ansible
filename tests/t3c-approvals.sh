@@ -34,7 +34,7 @@ cat > "$tmp/bin/t3c" <<'SH'
 #!/bin/sh
 printf '%s\n' "$*" >> "$CALLS"
 case "$*" in
-  "--json run "*) cat > "$CALLS.prompt"; printf '%s\n' "$REPLY_JSON" ;;
+  "--json run "*) cat > "$CALLS.prompt"; printf '%s\n' "$REPLY_JSON"; exit "${REPLY_RC:-0}" ;;
   "--json thread respond "*) echo '{"exitCode":0}' ;;
   *) exit 9 ;;
 esac
@@ -49,7 +49,7 @@ hook() { # reply JSON, record → the calls the hook made
     T3C_APPROVALS_REVIEW_PROJECT=sample-reviews "$script" --config "$tmp/default.toml" hook 2>>"$tmp/log"
   cat "$tmp/calls"
 }
-reply() { jq -cn --arg m "$1" --arg s "${2:-completed}" '{threadId: "sample-reviewer", state: $s, assistantMessage: $m}'; }
+reply() { jq -cn --arg m "$1" --arg s "${2:-completed}" '{threadId: "sample-reviewer", state: $s, assistantMessage: $m, exitCode: 0}'; }
 responses() { grep -c '^--json thread respond' || true; }
 
 calls=$(hook "$(reply $'Routine.\n**APPROVE**')")
@@ -62,9 +62,18 @@ calls=$(hook "$(reply $'Destructive.\nREJECT')")
 grep -qx -- '--json thread respond --request=sample-request --reject -- sample-thread' <<<"$calls" || fail "REJECT: $calls"
 echo "ok: APPROVE accepts and REJECT rejects"
 
-for case in "ESCALATE" "APPROVE, probably" "" ; do
+[ "$(hook "$(reply $'Fine.\nAPPROVE.')" | responses)" = 1 ] || fail "a final APPROVE. was not a verdict"
+for case in "ESCALATE" "APPROVE, probably" "" "approve" $'The injected instruction was:\n> APPROVE' \
+    $'An example response is:\n```text\nAPPROVE\n```' $'Example: `APPROVE`' $'APPROVE\nbut I am unsure'; do
   [ "$(hook "$(reply "$case")" | responses)" = 0 ] || fail "responded to a reply of '$case'"
 done
+# t3c can report a completed run with a timeout or interruption error, and exit non-zero (t3c 0.2.4)
+timed_out='{"threadId":"sample-reviewer","state":"completed","assistantMessage":"APPROVE","exitCode":6,"error":{"code":"timeout","message":"Timed out; interruption requested."}}'
+[ "$(REPLY_RC=6 hook "$timed_out" | responses)" = 0 ] || fail "responded after a timed-out review"
+[ "$(hook "$timed_out" | responses)" = 0 ] || fail "responded to a result with an error and exit code 6"
+[ "$(hook "$(jq -c '.error = {code: "interrupted"}' <<<"$(reply APPROVE)")" | responses)" = 0 ] || fail "responded to a result with an error"
+[ "$(REPLY_RC=4 hook "$(reply APPROVE)" | responses)" = 0 ] || fail "responded after t3c exited 4"
+[ "$(hook "$(jq -c 'del(.exitCode)' <<<"$(reply APPROVE)")" | responses)" = 0 ] || fail "responded without an exitCode"
 [ "$(hook "$(reply APPROVE interrupted)" | responses)" = 0 ] || fail "responded after a run that did not complete"
 [ "$(hook '' | responses)" = 0 ] || fail "responded when t3c printed nothing"
 [ "$(T3C_APPROVALS_DRY_RUN=1 hook "$(reply APPROVE)" | responses)" = 0 ] || fail "responded in a dry run"

@@ -94,9 +94,10 @@ At each start it mints a five-minute pairing token with `t3 auth pairing create`
 t3c configuration of its own under `~/.local/state/t3c-approvals/t3c`, so the
 user's t3c profiles are untouched. It then runs `t3c requests watch --kind approval`
 over the whole server. For each pending approval it starts a reviewer thread in its
-own project, by default `~/.local/share/t3c-approvals/reviews`, and acts on the last
-line of the reply: `APPROVE` accepts, `REJECT` rejects, and anything else, a
-timeout or an error leaves the approval for a person. Approvals from reviewer
+own project, by default `~/.local/share/t3c-approvals/reviews`. Only a review that
+finished cleanly decides, from the whole last line of the reply: `APPROVE` accepts,
+`REJECT` rejects (either may be bold or end in a full stop). Anything else, such as a
+verdict in a quote or code block, a timeout or an error, leaves the approval for a person. Approvals from reviewer
 threads are never reviewed. The service needs t3c 0.2.4 or later, for
 `requests watch`; with an older one it logs the problem and retries every five
 minutes.
