@@ -58,6 +58,17 @@ project folder. A folder that is already a T3 project keeps its title. The hook 
 the temporary checkouts of toha's `--update` and `--baseline` modes, and does
 nothing where there is no `t3` CLI.
 
+To register the folders made before the templates did this, run
+`ensure-t3-project --all`, or `ensure-t3-project --all --dry-run` to see what it
+would do. It expects the templates' layout, `/workspace/<project>/<repo>`, and
+reads each project's `.toha.json` rather than guessing from folder names. A
+folder that does not fit, such as a folder of `/workspace` with no project
+record, a folder in a project that is neither a recorded repo nor one of the
+template's own folders, or a recorded repo without its bare clone or default
+branch worktree, is reported and left unregistered, and the command exits 1.
+Folders that fit are still registered. `tests/ensure-t3-project.sh` checks this
+against a throwaway workspace with a fake `t3`.
+
 The generated ignore rules exclude nested clones and worktrees while keeping
 the setup files and template record available for version control.
 
