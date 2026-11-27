@@ -58,9 +58,10 @@ messages:
   after-apply: |
     {{project}} setup complete.
 
-    T3 Code has a project for this folder, named for the workspace and {{project}}.
-    Give it an icon that fits the project: a Lucide icon, or an emoji or a
-    monogram when no Lucide icon fits. An agent sets it with the T3 tool
-    `t3_project_update` (`projectIcon`); the T3 Code app can set it too.
+    T3 Code has a project for this folder, named for the workspace and {{project}}. Give it an icon that fits the project: a Lucide icon, or an emoji or a monogram when no Lucide icon fits. An agent sets it with the T3 tool `t3_project_update` (`projectIcon`); the T3 Code app can set it too.
 
-    Use the toha `repo` template to add repos to the project.
+    - Use the toha `repo` template to add repos to the project. If the user hasn't told you what repos belong to the project, ask.
+    - Update the project's AGENTS.md local instructions with a description of the project after consulting with the user.
+    - Update the ../AGENTS.md, adding this project to the tree.
+
+    Be sure to commit your changes when you are done.

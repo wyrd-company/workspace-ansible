@@ -57,8 +57,11 @@ messages:
   after-apply: |
     {{org}}/{{repo}} setup complete.
 
-    T3 Code has a project for this folder, named {{repo}}. When the {{branch}}
-    worktree ships an icon, t3.json here points the project at it. When it does
-    not, give the project an icon that fits the repository: a Lucide icon, or an
-    emoji or a monogram when no Lucide icon fits. An agent sets it with the T3
-    tool `t3_project_update` (`projectIcon`); the T3 Code app can set it too.
+    T3 Code has a project for this folder, named {{repo}}. When the {{branch}} worktree ships an icon, t3.json here points the project at it. When it does not, give the project an icon that fits the repository: a Lucide icon, or an emoji or a monogram when no Lucide icon fits. An agent sets it with the T3 tool `t3_project_update` (`projectIcon`); the T3 Code app can set it too.
+
+    Update the {{repo}}/AGENTS.md with some quick info about the repo that was cloned, pointing to {{repo}}/main/AGENTS.md for more details.
+
+    - Add this repo to the ../AGENTS.md tree.
+    - Create a ../references/{{repo}} folder
+
+    Be sure to commit your changes when you are done.
